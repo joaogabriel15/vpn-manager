@@ -19,6 +19,10 @@ Janela compacta com busca, lista de VPNs e botão Conectar. O menu Adicionar re�
 - Ícone na bandeja com atalhos por conexão. Fechar a janela mantém o app em segundo plano; Sair encerra somente o gerenciador.
 - Inicialização opcional na bandeja ao entrar na sessão.
 
+## Roadmap
+
+A versão atual é para Linux. A expansão para Windows, macOS, Android, iOS/iPadOS e outras famílias de VPN está planejada no [backlog](BACKLOG.md), com [inventário de compatibilidade](docs/VPN-COMPATIBILITY.md) e [plano por sistema operacional](docs/PLATFORMS.md). FortiClient/Fortinet tem tarefas separadas para SSL-VPN PPP, IPsec/SAML e políticas de endpoint. Esses documentos descrevem trabalho futuro, não suporte já disponível.
+
 ## Instalação
 
 Requisitos: Rust, GTK >= 4.12, NetworkManager/nmcli e o plugin de cada protocolo. KDE Plasma já oferece suporte à bandeja; GNOME pode exigir uma extensão AppIndicator. No CachyOS, os pacotes relevantes são `gtk4`, `networkmanager` e `networkmanager-openvpn`. O editor avançado usa `plasma-nm` ou `nm-connection-editor`.
