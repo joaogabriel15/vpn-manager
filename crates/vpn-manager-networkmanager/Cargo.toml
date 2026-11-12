@@ -1,0 +1,9 @@
+[package]
+name = "vpn-manager-networkmanager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gio = "0.21"
+tempfile = "3"
+vpn-manager-core = { path = "../vpn-manager-core" }

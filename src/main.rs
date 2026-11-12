@@ -1,14 +1,17 @@
 // Dialog widgets remain supported in GTK 4; keeping them supports GTK 4.12 desktops.
 #![allow(deprecated)]
-mod backend;
+use vpn_manager_networkmanager as backend;
 mod icons;
-use backend::Profile;
 use gtk::{gio, glib, prelude::*};
 use ksni::blocking::TrayMethods;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
+use vpn_manager_core::Profile;
+use vpn_manager_core::auth::{Secret, SecretStore};
+use vpn_manager_core::backend::{Backend, CancellationToken, ErrorKind, Operation};
+use vpn_manager_core::settings::{OpenVpnProfile, ProfileChanges, ProfileField as Field};
 
 #[derive(Clone)]
 enum Event {
@@ -31,13 +34,24 @@ impl ksni::Tray for Tray {
         String::new()
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        icons::tray(self.profiles.iter().any(|p| p.active))
+        icons::tray(self.profiles.iter().any(|p| p.state.is_connected()))
     }
     fn tool_tip(&self) -> ksni::ToolTip {
-        let active = self.profiles.iter().filter(|p| p.active).count();
+        let active = self
+            .profiles
+            .iter()
+            .filter(|p| p.state.is_connected())
+            .count();
+        let unknown = self
+            .profiles
+            .iter()
+            .filter(|p| p.state == vpn_manager_core::ConnectionState::Unknown)
+            .count();
         ksni::ToolTip {
             title: "VPN Manager".into(),
-            description: if active > 0 {
+            description: if unknown > 0 {
+                format!("Estado de {unknown} conexão(ões) desconhecido. Atualize a lista.")
+            } else if active > 0 {
                 format!("{active} conexão(ões) ativa(s)")
             } else {
                 "Nenhuma VPN conectada. Clique para abrir.".into()
@@ -66,9 +80,15 @@ impl ksni::Tray for Tray {
                 StandardItem {
                     label: format!(
                         "{} {}",
-                        if p.active { "Desconectar" } else { "Conectar" },
+                        if p.state.is_connected() {
+                            "Desconectar"
+                        } else {
+                            "Conectar"
+                        },
                         p.name
                     ),
+                    enabled: !p.state.is_transitioning()
+                        && p.state != vpn_manager_core::ConnectionState::Unknown,
                     activate: Box::new(move |t: &mut Self| {
                         let _ = t.tx.try_send(Event::Toggle(profile.clone()));
                     }),
@@ -104,6 +124,9 @@ struct Ui {
     busy: Cell<bool>,
     refreshing: Cell<bool>,
     pending_refresh: Cell<bool>,
+    cancel: gtk::Button,
+    activation: RefCell<Option<(String, CancellationToken)>>,
+    monitor: RefCell<Option<Box<dyn vpn_manager_core::backend::EventSubscription>>>,
 }
 
 fn main() -> glib::ExitCode {
@@ -196,6 +219,9 @@ fn launch(ui: &Rc<Ui>, f: impl std::future::Future<Output = Result<String, Strin
     let ui = ui.clone();
     glib::spawn_future_local(async move {
         let result = f.await;
+        ui.activation.borrow_mut().take();
+        ui.cancel.set_visible(false);
+        ui.cancel.set_sensitive(true);
         ui.busy.set(false);
         ui.spinner.stop();
         ui.list.set_sensitive(true);
@@ -511,6 +537,8 @@ fn build(app: &gtk::Application) {
     margins(&options_menu, 8);
     let diagnostics = icon_button("Diagnóstico de rede", "activity", "ghost");
     options_menu.append(&diagnostics);
+    let capabilities = icon_button("Recursos VPN disponíveis", "settings", "ghost");
+    options_menu.append(&capabilities);
     let startup = gtk::CheckButton::with_label("Iniciar com o Linux");
     startup.set_active(autostart_path().exists());
     options_menu.append(&startup);
@@ -560,6 +588,9 @@ fn build(app: &gtk::Application) {
     footer.append(&status);
     let spinner = gtk::Spinner::new();
     footer.append(&spinner);
+    let cancel = gtk::Button::with_label("Cancelar conexão");
+    cancel.set_visible(false);
+    footer.append(&cancel);
     root.append(&footer);
     window.set_child(Some(&root));
     let ui = Rc::new(Ui {
@@ -574,6 +605,23 @@ fn build(app: &gtk::Application) {
         busy: Cell::new(false),
         refreshing: Cell::new(false),
         pending_refresh: Cell::new(false),
+        cancel,
+        activation: RefCell::new(None),
+        monitor: RefCell::new(None),
+    });
+    let u = ui.clone();
+    ui.cancel.connect_clicked(move |_| {
+        let Some((id, token)) = u.activation.borrow().clone() else {
+            return;
+        };
+        token.cancel();
+        u.cancel.set_sensitive(false);
+        u.status.set_text("Cancelando conexão…");
+        glib::spawn_future_local(async move {
+            // The activation future performs a final cancellation after nmcli
+            // completes, covering a request that has not reached the daemon yet.
+            let _ = backend::NetworkManager.cancel(&id).await;
+        });
     });
     for name in ["show", "hide", "quit"] {
         let action = gio::SimpleAction::new(name, None);
@@ -664,6 +712,27 @@ fn build(app: &gtk::Application) {
         if let Err(e) = set_autostart(b.is_active()) {
             u.status.set_text(&e.to_string());
         }
+    });
+    let u = ui.clone();
+    capabilities.connect_clicked(move |_| {
+        let u = u.clone();
+        glib::spawn_future_local(async move {
+            let text = match backend::NetworkManager.capabilities().await {
+                Ok(report) => {
+                    let mut lines = vec![report.version, format!("NetworkManager em execução: {}", if report.running { "sim" } else { "não" }), "WireGuard: suporte nativo do NetworkManager; requer suporte do sistema.".into()];
+                    for plugin in report.plugins {
+                        lines.push(format!("{}: engine {}; diálogo de autenticação {}", plugin.name, if plugin.engine_available { "instalada" } else { "não encontrada" }, if plugin.auth_dialog_available { "instalado" } else { "não encontrado" }));
+                    }
+                    lines.push("Instale plugins pelo gerenciador de pacotes do Linux. A presença do plugin não homologa um servidor ou método de login.".into());
+                    lines.join("\n\n")
+                }
+                Err(e) => e.to_string(),
+            };
+            let d = message_dialog(&u, "Recursos VPN disponíveis", &text);
+            dialog_actions(&d, None, "Fechar", false);
+            d.run_future().await;
+            d.close();
+        });
     });
     refresh(&ui);
     monitor(&ui);
@@ -775,6 +844,76 @@ fn build(app: &gtk::Application) {
                 }
                 assert!(!u.busy.get(), "cancelamento do editor não terminou");
             }
+            if let Some(p) = expected.iter().find(|p| {
+                p.protocol == "openvpn"
+                    && p.state == vpn_manager_core::ConnectionState::Disconnected
+            }) {
+                toggle(&u, p.clone());
+                let mut cancelled_password = None;
+                for _ in 0..100 {
+                    let dialog = gtk::Window::list_toplevels()
+                        .into_iter()
+                        .filter_map(|w| w.downcast::<gtk::Dialog>().ok())
+                        .find(|d| {
+                            d.is_visible() && d.title().is_some_and(|t| t.starts_with("Conectar "))
+                        });
+                    if let Some(d) = dialog {
+                        let widgets = descendants(d.upcast_ref());
+                        let password = widgets
+                            .iter()
+                            .find_map(|w| w.clone().downcast::<gtk::PasswordEntry>().ok())
+                            .expect("campo de senha");
+                        let remember = widgets
+                            .iter()
+                            .find_map(|w| w.clone().downcast::<gtk::CheckButton>().ok())
+                            .expect("opção de cofre");
+                        assert!(
+                            !remember.is_active(),
+                            "salvar senha exige escolha explícita"
+                        );
+                        if let Some(path) = std::env::var_os("VPN_MANAGER_PREVIEW") {
+                            glib::timeout_future(std::time::Duration::from_millis(150)).await;
+                            save_preview(
+                                d.upcast_ref(),
+                                &std::path::PathBuf::from(path)
+                                    .with_file_name("vpn-manager-login.png"),
+                            )
+                            .await
+                            .expect("prévia do login sem credenciais");
+                        }
+                        password.set_text("synthetic-ui-cancellation-fixture");
+                        cancelled_password = Some(password);
+                        let cancel = widgets
+                            .into_iter()
+                            .filter_map(|w| w.downcast::<gtk::Button>().ok())
+                            .find(|b| b.label().as_deref() == Some("Cancelar"))
+                            .expect("cancelar login");
+                        cancel.emit_clicked();
+                        break;
+                    }
+                    glib::timeout_future(std::time::Duration::from_millis(50)).await;
+                }
+                for _ in 0..100 {
+                    if !u.busy.get() {
+                        break;
+                    }
+                    glib::timeout_future(std::time::Duration::from_millis(50)).await;
+                }
+                assert!(!u.busy.get(), "cancelamento do login terminou");
+                assert!(
+                    cancelled_password
+                        .expect("login foi aberto")
+                        .text()
+                        .is_empty(),
+                    "senha transitória deve ser limpa no cancelamento"
+                );
+                assert!(u.activation.borrow().is_none());
+                assert!(!u.cancel.is_visible());
+            }
+            if std::env::var_os("VPN_MANAGER_IDLE_TEST").is_some() {
+                println!("UI_IDLE_READY");
+                glib::timeout_future(std::time::Duration::from_secs(15)).await;
+            }
             println!(
                 "UI_SMOKE_OK profiles={} tray={}",
                 expected.len(),
@@ -846,9 +985,17 @@ fn refresh(ui: &Rc<Ui>) {
                         .set_text("Fechar a janela mantém o aplicativo na bandeja.");
                 }
             }
-            Err(e) => ui
-                .status
-                .set_text(&format!("Não foi possível consultar o NetworkManager: {e}")),
+            Err(e) => {
+                for p in ui.profiles.borrow_mut().iter_mut() {
+                    p.state = vpn_manager_core::ConnectionState::Unknown;
+                }
+                if let Some(tray) = ui.tray.borrow().as_ref() {
+                    tray.update(|t| t.profiles = ui.profiles.borrow().clone());
+                }
+                render(&ui);
+                ui.status
+                    .set_text(&format!("Não foi possível consultar o NetworkManager: {e}"));
+            }
         }
         ui.refreshing.set(false);
         if ui.pending_refresh.replace(false) {
@@ -897,7 +1044,7 @@ fn render(ui: &Rc<Ui>) {
     {
         let card = column(0);
         card.add_css_class("connection");
-        if p.active {
+        if p.state.is_connected() {
             card.add_css_class("active");
         }
         let top = row(12);
@@ -907,7 +1054,7 @@ fn render(ui: &Rc<Ui>) {
             } else {
                 "shield"
             },
-            if p.active {
+            if p.state.is_connected() {
                 icons::ACCENT
             } else {
                 icons::MUTED
@@ -921,26 +1068,38 @@ fn render(ui: &Rc<Ui>) {
         name.set_max_width_chars(30);
         name.set_tooltip_text(Some(&p.name));
         info.append(&name);
-        let state = label(
-            if p.active {
-                "Conectada"
-            } else {
-                "Desconectada"
-            },
-            "muted",
-        );
-        if p.active {
+        let state = label(p.state.label(), "muted");
+        if p.state.is_connected() {
             state.add_css_class("connected");
         }
         info.append(&state);
-        if p.kind == "wireguard" {
-            info.append(&label("WireGuard", "muted"));
-        }
+        info.append(&label(
+            match p.protocol.as_str() {
+                "wireguard" => "WireGuard",
+                "openvpn" => "OpenVPN",
+                "openconnect" => "OpenConnect",
+                "strongswan" => "IPsec / strongSwan",
+                "fortisslvpn" => "Fortinet SSL / plugin do sistema",
+                other => other,
+            },
+            "muted",
+        ));
         top.append(&info);
         let connect = icon_button(
-            if p.active { "Desconectar" } else { "Conectar" },
+            if p.state.is_connected() {
+                "Desconectar"
+            } else {
+                "Conectar"
+            },
             "power",
-            if p.active { "disconnect" } else { "primary" },
+            if p.state.is_connected() {
+                "disconnect"
+            } else {
+                "primary"
+            },
+        );
+        connect.set_sensitive(
+            !p.state.is_transitioning() && p.state != vpn_manager_core::ConnectionState::Unknown,
         );
         connect.set_valign(gtk::Align::Center);
         top.append(&connect);
@@ -962,7 +1121,7 @@ fn render(ui: &Rc<Ui>) {
         margins(&menu, 6);
         let duplicate = icon_button("Duplicar perfil", "copy", "ghost");
         let export = icon_button("Exportar arquivo", "export", "ghost");
-        export.set_sensitive(p.kind == "vpn");
+        export.set_sensitive(backend::NetworkManager.supports(Operation::Export, &p.kind));
         if p.kind == "wireguard" {
             export.set_tooltip_text(Some(
                 "A exportação de WireGuard não está disponível nesta versão",
@@ -998,7 +1157,7 @@ fn render(ui: &Rc<Ui>) {
                     &format!(
                         "Remover a VPN ‘{}’? O perfil será excluído do sistema{}.",
                         p.name,
-                        if p.active {
+                        if p.state.is_connected() {
                             " e a conexão será encerrada"
                         } else {
                             ""
@@ -1009,7 +1168,10 @@ fn render(ui: &Rc<Ui>) {
                 {
                     return Ok("Remoção cancelada.".into());
                 }
-                backend::command(&["connection", "delete", "uuid", &p.uuid]).await?;
+                backend::NetworkManager
+                    .remove(&p.uuid)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok("Perfil removido.".into())
             });
         });
@@ -1018,13 +1180,10 @@ fn render(ui: &Rc<Ui>) {
         duplicate.connect_clicked(move |_| {
             let p = profile.clone();
             launch(&u, async move {
-                backend::command(&[
-                    "connection",
-                    "clone",
-                    &p.uuid,
-                    &format!("{} (cópia)", p.name),
-                ])
-                .await?;
+                backend::NetworkManager
+                    .duplicate(&p.uuid, &format!("{} (cópia)", p.name))
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok("Perfil duplicado.".into())
             });
         });
@@ -1033,7 +1192,7 @@ fn render(ui: &Rc<Ui>) {
         card.append(&top);
         ui.list.append(&card);
     }
-    let active = profiles.iter().filter(|p| p.active).count();
+    let active = profiles.iter().filter(|p| p.state.is_connected()).count();
     ui.summary.set_text(&format!(
         "{} {} · {} {}",
         profiles.len(),
@@ -1050,17 +1209,21 @@ fn render(ui: &Rc<Ui>) {
 fn toggle(ui: &Rc<Ui>, p: Profile) {
     let u = ui.clone();
     launch(ui, async move {
-        if p.active {
-            backend::command(&["connection", "down", "uuid", &p.uuid]).await?;
+        if p.state.is_connected() {
+            backend::NetworkManager
+                .disconnect(&p.uuid)
+                .await
+                .map_err(|e| e.to_string())?;
             return Ok("VPN desconectada.".into());
         }
-        if p.kind == "vpn" {
+        if p.protocol == "openvpn" {
             u.window.present();
             let old_user = backend::property(&p.uuid, "vpn.user-name").await?;
             let (d, content) = dialog(&u, &format!("Conectar {}", p.name));
+            d.set_default_height(480);
             let user = entry(&content, "Usuário (se exigido pelo servidor)", &old_user);
             let label = gtk::Label::new(Some(
-                "Senha (deixe vazia para usar certificados ou o cofre do sistema)",
+                "Senha (deixe vazia para usar certificados ou o agente do sistema)",
             ));
             label.set_wrap(true);
             content.append(&label);
@@ -1070,44 +1233,154 @@ fn toggle(ui: &Rc<Ui>, p: Profile) {
                 .activates_default(true)
                 .build();
             content.append(&password);
+            let remember = gtk::CheckButton::with_label("Lembrar senha após conectar");
+            let vault = backend::vault::SecretService::default();
+            remember.set_sensitive(vault.available());
+            if !vault.available() {
+                remember.set_tooltip_text(Some(
+                    "Instale libsecret/secret-tool e configure um cofre Secret Service.",
+                ));
+            }
+            content.append(&remember);
+            let vault_actions = row(6);
+            let load = gtk::Button::with_label("Usar senha salva");
+            let forget = gtk::Button::with_label("Esquecer senha");
+            for button in [&load, &forget] {
+                button.set_sensitive(vault.available());
+                vault_actions.append(button);
+            }
+            content.append(&vault_actions);
+            let vault_status = gtk::Label::new(None);
+            vault_status.set_wrap(true);
+            vault_status.add_css_class("muted");
+            content.append(&vault_status);
+            let password_copy = password.clone();
+            let remember_copy = remember.clone();
+            user.connect_changed(move |_| {
+                password_copy.set_text("");
+                remember_copy.set_active(false);
+            });
+            let user_copy = user.clone();
+            let password_copy = password.clone();
+            let remember_copy = remember.clone();
+            let status_copy = vault_status.clone();
+            let id = p.uuid.clone();
+            let d_weak = d.downgrade();
+            load.connect_clicked(move |button| {
+                let button = button.clone();
+                let password = password_copy.clone();
+                let remember = remember_copy.clone();
+                let status = status_copy.clone();
+                let key = backend::vault::profile_key(&id, user_copy.text().as_str());
+                let account = user_copy.text().to_string();
+                let user = user_copy.clone();
+                let d_weak = d_weak.clone();
+                button.set_sensitive(false);
+                glib::spawn_future_local(async move {
+                    let result = backend::vault::SecretService::default()
+                        .lookup_openvpn(&key)
+                        .await;
+                    if d_weak.upgrade().is_none_or(|d| !d.is_visible())
+                        || user.text().as_str() != account
+                    {
+                        button.set_sensitive(true);
+                        return;
+                    }
+                    match result {
+                        Ok(Some(secret)) => {
+                            password.set_text(secret.expose());
+                            remember.set_active(true);
+                            status.set_text("Senha obtida do cofre.");
+                        }
+                        Ok(None) => status.set_text("Nenhuma senha salva para este usuário."),
+                        Err(e) => status.set_text(&e.to_string()),
+                    }
+                    button.set_sensitive(true);
+                });
+            });
+            let user_copy = user.clone();
+            let remember_copy = remember.clone();
+            let status_copy = vault_status.clone();
+            let id = p.uuid.clone();
+            forget.connect_clicked(move |button| {
+                let button = button.clone();
+                let remember = remember_copy.clone();
+                let status = status_copy.clone();
+                let key = backend::vault::profile_key(&id, user_copy.text().as_str());
+                button.set_sensitive(false);
+                glib::spawn_future_local(async move {
+                    match backend::vault::SecretService::default()
+                        .clear_openvpn(&key)
+                        .await
+                    {
+                        Ok(()) => {
+                            remember.set_active(false);
+                            status.set_text("Senha removida do cofre.");
+                        }
+                        Err(e) => status.set_text(&e.to_string()),
+                    }
+                    button.set_sensitive(true);
+                });
+            });
             let response = d.run_future().await;
             d.close();
             if response != gtk::ResponseType::Accept {
+                password.set_text("");
                 return Ok("Conexão cancelada.".into());
             }
-            if user.text().as_str() != old_user {
-                backend::command(&[
-                    "connection",
-                    "modify",
-                    &p.uuid,
-                    "vpn.user-name",
-                    user.text().as_str(),
-                ])
-                .await?;
-            }
-            let secret = password.text().to_string();
+            let secret = Secret::new(password.text().to_string());
             password.set_text("");
-            backend::connect(
+            if user.text().as_str() != old_user {
+                backend::NetworkManager
+                    .update(
+                        &p.uuid,
+                        &ProfileChanges(vec![(Field::Username, user.text().to_string())]),
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            let result = activate(
+                &u,
                 &p.uuid,
                 if secret.is_empty() {
                     None
                 } else {
-                    Some(&secret)
+                    Some(secret.expose())
                 },
             )
             .await?;
-        } else {
-            backend::connect(&p.uuid, None).await?;
+            if remember.is_active() && !secret.is_empty() && result == "VPN conectada." {
+                let key = backend::vault::profile_key(&p.uuid, user.text().as_str());
+                if let Err(error) = vault.save_openvpn(&key, &secret).await {
+                    return Ok(format!("VPN conectada. A senha não foi salva: {error}"));
+                }
+            }
+            return Ok(result);
         }
-        Ok("VPN conectada.".into())
+        activate(&u, &p.uuid, None).await
     });
+}
+
+async fn activate(ui: &Ui, id: &str, password: Option<&str>) -> Result<String, String> {
+    let token = CancellationToken::default();
+    *ui.activation.borrow_mut() = Some((id.into(), token.clone()));
+    ui.cancel.set_visible(true);
+    ui.status.set_text("Conectando…");
+    let result = backend::connect_cancellable(id, password, &token).await;
+    ui.activation.borrow_mut().take();
+    ui.cancel.set_visible(false);
+    match result {
+        Ok(()) => Ok("VPN conectada.".into()),
+        Err(e) if e.kind == ErrorKind::Cancelled => Ok("Conexão cancelada.".into()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 fn import_profile(ui: &Rc<Ui>) {
     let u = ui.clone();
     launch(ui, async move {
         let chooser = gtk::FileChooserNative::new(
-            Some("Importar VPN — .ovpn ou WireGuard .conf"),
+            Some("Importar VPN — OpenVPN, WireGuard ou perfil VPN Manager"),
             Some(&u.window),
             gtk::FileChooserAction::Open,
             Some("Importar"),
@@ -1121,24 +1394,24 @@ fn import_profile(ui: &Rc<Ui>) {
             .file()
             .and_then(|f| f.path())
             .ok_or("Selecione um arquivo local.")?;
-        let kind = if path.extension().is_some_and(|x| x == "ovpn") {
-            "openvpn"
-        } else {
-            if !confirm(&u, "Importar este arquivo como um perfil WireGuard? Para OpenVPN, use a extensão .ovpn.").await
-            {
-                return Ok("Importação cancelada.".into());
-            }
-            "wireguard"
-        };
-        backend::command(&[
-            "connection",
-            "import",
-            "type",
-            kind,
-            "file",
-            path.to_str().ok_or("Caminho inválido")?,
-        ])
-        .await?;
+        let format = backend::detect_file(&path)
+            .await
+            .map_err(|e| e.to_string())?;
+        let kind = format.backend_name();
+        if !confirm(
+            &u,
+            &format!(
+                "Importar este arquivo como {kind}? Revise as configurações antes de conectar."
+            ),
+        )
+        .await
+        {
+            return Ok("Importação cancelada.".into());
+        }
+        backend::NetworkManager
+            .import(&path)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok("Perfil importado. Revise as configurações antes de conectar.".into())
     });
 }
@@ -1184,12 +1457,12 @@ fn edit_profile(ui: &Rc<Ui>, p: Profile) {
         content.append(&note);
 
         let keys = [
-            "connection.id",
-            "ipv4.dns",
-            "ipv4.dns-search",
-            "ipv4.routes",
-            "ipv6.dns",
-            "ipv6.routes",
+            Field::Name,
+            Field::Dns4,
+            Field::Search4,
+            Field::Routes4,
+            Field::Dns6,
+            Field::Routes6,
         ];
         let labels = [
             "Nome",
@@ -1201,44 +1474,87 @@ fn edit_profile(ui: &Rc<Ui>, p: Profile) {
         ];
         let mut entries = Vec::new();
         for (key, label) in keys.iter().zip(labels) {
-            let page = if *key == "connection.id" {
+            let page = if *key == Field::Name {
                 &general
-            } else if key.starts_with("ipv6") {
+            } else if matches!(key, Field::Dns6 | Field::Routes6 | Field::Search6) {
                 &advanced
             } else {
                 &network
             };
-            entries.push(entry(page, label, &backend::property(&p.uuid, key).await?));
+            entries.push(entry(
+                page,
+                label,
+                &backend::NetworkManager
+                    .read(&p.uuid, *key)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            ));
         }
         let split = gtk::CheckButton::with_label(
             "Túnel dividido — usar VPN somente para as rotas configuradas",
         );
-        split.set_active(backend::property(&p.uuid, "ipv4.never-default").await? == "yes");
+        split.set_active(
+            backend::NetworkManager
+                .read(&p.uuid, Field::Split4)
+                .await
+                .map_err(|e| e.to_string())?
+                == "yes",
+        );
         wrap_check_label(&split);
         network.append(&split);
         let dns = gtk::CheckButton::with_label("Ignorar DNS recebido do servidor");
-        dns.set_active(backend::property(&p.uuid, "ipv4.ignore-auto-dns").await? == "yes");
+        dns.set_active(
+            backend::NetworkManager
+                .read(&p.uuid, Field::IgnoreDns4)
+                .await
+                .map_err(|e| e.to_string())?
+                == "yes",
+        );
         wrap_check_label(&dns);
         network.append(&dns);
+        let split6 =
+            gtk::CheckButton::with_label("IPv6: usar VPN somente para as rotas configuradas");
+        split6.set_active(
+            backend::NetworkManager
+                .read(&p.uuid, Field::Split6)
+                .await
+                .map_err(|e| e.to_string())?
+                == "yes",
+        );
+        wrap_check_label(&split6);
+        advanced.append(&split6);
+        let dns6 = gtk::CheckButton::with_label("IPv6: ignorar DNS recebido do servidor");
+        dns6.set_active(
+            backend::NetworkManager
+                .read(&p.uuid, Field::IgnoreDns6)
+                .await
+                .map_err(|e| e.to_string())?
+                == "yes",
+        );
+        wrap_check_label(&dns6);
+        advanced.append(&dns6);
         let mut vpn_entries = Vec::new();
         if p.kind == "vpn" {
             for (key, label) in [
-                ("vpn.user-name", "Usuário"),
+                (Field::Username, "Usuário"),
                 (
-                    "vpn.data",
+                    Field::PluginOptions,
                     "Opções do plugin (chave=valor, separadas por vírgula)",
                 ),
             ] {
                 vpn_entries.push((
                     key,
                     entry(
-                        if key == "vpn.user-name" {
+                        if key == Field::Username {
                             &general
                         } else {
                             &advanced
                         },
                         label,
-                        &backend::property(&p.uuid, key).await?,
+                        &backend::NetworkManager
+                            .read(&p.uuid, key)
+                            .await
+                            .map_err(|e| e.to_string())?,
                     ),
                 ));
             }
@@ -1274,24 +1590,27 @@ fn edit_profile(ui: &Rc<Ui>, p: Profile) {
         if entries[0].text().trim().is_empty() {
             return Err("Informe um nome para a VPN.".into());
         }
-        let mut args = vec!["connection".to_owned(), "modify".to_owned(), p.uuid];
+        let mut changes = ProfileChanges::default();
         for (key, e) in keys.iter().zip(entries) {
-            args.push(key.to_string());
-            args.push(e.text().to_string());
+            changes.0.push((*key, e.text().to_string()));
         }
         for (key, e) in vpn_entries {
-            args.push(key.into());
-            args.push(e.text().to_string());
+            changes.0.push((key, e.text().to_string()));
         }
-        for key in ["ipv4.never-default", "ipv6.never-default"] {
-            args.push(key.into());
-            args.push(if split.is_active() { "yes" } else { "no" }.into());
+        for (key, checkbox) in [
+            (Field::Split4, &split),
+            (Field::Split6, &split6),
+            (Field::IgnoreDns4, &dns),
+            (Field::IgnoreDns6, &dns6),
+        ] {
+            changes
+                .0
+                .push((key, if checkbox.is_active() { "yes" } else { "no" }.into()));
         }
-        for key in ["ipv4.ignore-auto-dns", "ipv6.ignore-auto-dns"] {
-            args.push(key.into());
-            args.push(if dns.is_active() { "yes" } else { "no" }.into());
-        }
-        backend::command(&args.iter().map(String::as_str).collect::<Vec<_>>()).await?;
+        backend::NetworkManager
+            .update(&p.uuid, &changes)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok("Configurações salvas. Reconecte a VPN para aplicar.".into())
     });
 }
@@ -1318,42 +1637,17 @@ fn create_profile(ui: &Rc<Ui>) {
             return Ok("Criação cancelada.".into());
         }
         let port: u16 = port.text().parse().map_err(|_| "Porta inválida")?;
-        if port == 0 || name.text().trim().is_empty() || host.text().trim().is_empty() {
-            return Err("Informe nome, servidor e uma porta entre 1 e 65535.".into());
-        }
-        for value in [host.text(), ca.text()] {
-            if value.contains([',', '\n', '\r', '=']) {
-                return Err("Servidor e caminho não podem conter vírgula, = ou quebra de linha. Importe um .ovpn para esse caso.".into());
-            }
-        }
-        if !std::path::Path::new(ca.text().as_str()).is_file() {
-            return Err("Selecione um certificado CA existente.".into());
-        }
-        let data = format!(
-            "connection-type=password,remote={},port={port},ca={},password-flags=2,proto-tcp={}",
-            host.text().trim(),
-            ca.text(),
-            if tcp.is_active() { "yes" } else { "no" }
-        );
-        backend::command(&[
-            "connection",
-            "add",
-            "type",
-            "vpn",
-            "vpn-type",
-            "openvpn",
-            "con-name",
-            name.text().as_str(),
-            "ifname",
-            "*",
-            "vpn.data",
-            &data,
-            "vpn.user-name",
-            user.text().as_str(),
-            "connection.autoconnect",
-            "no",
-        ])
-        .await?;
+        backend::NetworkManager
+            .create(&OpenVpnProfile {
+                name: name.text().to_string(),
+                remote: host.text().to_string(),
+                port,
+                username: user.text().to_string(),
+                ca: ca.text().as_str().into(),
+                tcp: tcp.is_active(),
+            })
+            .await
+            .map_err(|e| e.to_string())?;
         Ok("VPN criada. Configure as opções adicionais antes de conectar.".into())
     });
 }
@@ -1361,7 +1655,7 @@ fn export_profile(ui: &Rc<Ui>, p: Profile) {
     let u = ui.clone();
     launch(ui, async move {
         let chooser = gtk::FileChooserNative::new(
-            Some("Exportar perfil OpenVPN"),
+            Some("Exportar perfil VPN"),
             Some(&u.window),
             gtk::FileChooserAction::Save,
             Some("Exportar"),
@@ -1375,12 +1669,10 @@ fn export_profile(ui: &Rc<Ui>, p: Profile) {
             .file()
             .and_then(|f| f.path())
             .ok_or("Caminho inválido")?;
-        let data = backend::command(&["connection", "export", &p.uuid]).await?;
-        let parent = path.parent().ok_or("Pasta inválida")?;
-        use std::io::Write;
-        let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-        file.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
-        file.persist(&path).map_err(|e| e.to_string())?;
+        backend::NetworkManager
+            .export(&p.uuid, &path)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok("Perfil exportado com permissão privada. Ele pode referenciar certificados externos; preserve esses arquivos.".into())
     });
 }
@@ -1418,41 +1710,25 @@ fn set_autostart(enabled: bool) -> std::io::Result<()> {
 }
 fn monitor(ui: &Rc<Ui>) {
     let u = Rc::downgrade(ui);
-    glib::spawn_future_local(async move {
-        let process = gio::Subprocess::newv(
-            &[
-                std::ffi::OsStr::new("env"),
-                std::ffi::OsStr::new("LC_ALL=C"),
-                std::ffi::OsStr::new("nmcli"),
-                std::ffi::OsStr::new("monitor"),
-            ],
-            gio::SubprocessFlags::STDOUT_PIPE | gio::SubprocessFlags::STDERR_SILENCE,
-        );
-        match process {
-            Ok(process) => {
-                if let Some(app) = u.upgrade().and_then(|u| u.window.application()) {
-                    let p = process.clone();
-                    app.connect_shutdown(move |_| p.force_exit());
-                }
-                let stream = gio::DataInputStream::new(&process.stdout_pipe().unwrap());
-                while let Ok(Some(_)) = stream.read_line_future(glib::Priority::DEFAULT).await {
-                    if let Some(u) = u.upgrade() {
-                        refresh(&u);
-                    } else {
-                        process.force_exit();
-                        return;
-                    }
-                }
-                if let Some(u) = u.upgrade() {
-                    u.status
-                        .set_text("Monitor encerrado. Use Atualizar para consultar as conexões.");
-                }
-            }
-            Err(e) => {
-                if let Some(u) = u.upgrade() {
-                    u.status.set_text(&format!("Monitor indisponível: {e}"));
-                }
+    match backend::NetworkManager.subscribe(move |event| {
+        if let Some(u) = u.upgrade() {
+            match event {
+                vpn_manager_core::backend::BackendEvent::ProfilesChanged => refresh(&u),
+                vpn_manager_core::backend::BackendEvent::MonitorStopped => u
+                    .status
+                    .set_text("Monitor encerrado. Use Atualizar para consultar as conexões."),
             }
         }
-    });
+    }) {
+        Ok(subscription) => *ui.monitor.borrow_mut() = Some(subscription),
+        Err(e) => ui.status.set_text(&e.to_string()),
+    }
+    if let Some(app) = ui.window.application() {
+        let u = Rc::downgrade(ui);
+        app.connect_shutdown(move |_| {
+            if let Some(u) = u.upgrade() {
+                u.monitor.borrow_mut().take();
+            }
+        });
+    }
 }

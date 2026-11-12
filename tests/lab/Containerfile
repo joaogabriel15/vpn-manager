@@ -1,0 +1,5 @@
+FROM docker.io/library/debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openvpn wireguard-tools wireguard-go iproute2 iputils-ping openssl dnsmasq-base libc-bin procps && rm -rf /var/lib/apt/lists/*
+COPY endpoint.sh /usr/local/bin/vpn-lab-endpoint
+RUN chmod 755 /usr/local/bin/vpn-lab-endpoint
+ENTRYPOINT ["/usr/local/bin/vpn-lab-endpoint"]

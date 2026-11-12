@@ -1,0 +1,10 @@
+name: Isolated VPN engines
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  tunnels:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/lab/run.py --runtime docker

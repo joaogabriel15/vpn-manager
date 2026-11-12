@@ -1,0 +1,26 @@
+# Exemplo sintético: ajuste o servidor e o caminho da CA antes de criar.
+# create-profile cria um perfil inativo, sem conectar automaticamente.
+version = 2
+name = "OpenVPN de exemplo"
+backend = "networkmanager"
+
+[configuration]
+protocol = "openvpn"
+remote = "vpn.example.invalid"
+port = 1194
+username = ""
+ca = "/caminho/absoluto/ca.crt"
+tcp = false
+
+[network.ipv4]
+dns = ["192.0.2.53"]
+search = ["~example.invalid"]
+routes = ["192.0.2.0/24"]
+split = true
+ignore_auto_dns = true
+
+[network.ipv6]
+dns = ["2001:db8::53"]
+routes = ["2001:db8::/32"]
+split = true
+ignore_auto_dns = true

@@ -4,7 +4,7 @@ Pesquisa revisada em **12/11/2026**. Tudo abaixo, exceto a implementação Linux
 
 ## Meta e níveis de entrega
 
-Prioridade principal: **Linux, Windows, macOS, Android e iOS/iPadOS**. Expansão posterior: BSD, ChromeOS e sistemas de roteadores/servidores. Outras plataformas passam por descoberta de APIs e demanda. Não prometer o mesmo protocolo, número de túneis simultâneos ou gerenciamento de outros clientes em todos os sistemas.
+Prioridade atual, definida pelo proprietário: **Linux, Windows e macOS**. **Android e iOS/iPadOS estão adiados para uma fase futura**; requisitos móveis não bloqueiam a entrega desktop. Expansão posterior: BSD, ChromeOS e sistemas de roteadores/servidores. Outras plataformas passam por descoberta de APIs e demanda. Não prometer o mesmo protocolo, número de túneis simultâneos ou gerenciamento de outros clientes em todos os sistemas.
 
 | Plataforma | Caminho técnico a avaliar | Entrega mínima proposta | Itens |
 | --- | --- | --- | --- |
@@ -12,9 +12,9 @@ Prioridade principal: **Linux, Windows, macOS, Android e iOS/iPadOS**. Expansão
 | Linux sem NetworkManager / headless | CLI e adaptadores de serviços, sem depender de sessão gráfica. | Estado, conexão, desligamento e configuração por canal autenticado; daemon opcional. | OS-06 |
 | Windows | Serviço com privilégios mínimos; APIs VPN nativas e componentes oficiais para outros protocolos. | GUI/tray, OpenVPN e WireGuard; depois IKEv2 e conectores homologados. Arquiteturas x64 e ARM64 avaliadas separadamente. | OS-02 |
 | macOS | NetworkExtension e componentes auxiliares permitidos, com assinatura e distribuição definidas. | App de menu, OpenVPN/WireGuard/IKEv2 conforme viabilidade e homologação. Apple Silicon e Intel conforme suporte vigente escolhido. | OS-03 |
-| Android | VpnService ou APIs de VPN da plataforma; camada de integração com o núcleo Rust. | Consentimento, início/parada pelo sistema, estado, reconexão, importação e gestão de credenciais. | OS-04 |
-| iOS/iPadOS | NetworkExtension/NEVPNManager e extensões de túnel permitidas. | App móvel e extensão assinada; protocolos somente depois de integração e testes reais. | OS-05 |
-| ChromeOS | Avaliar app Android suportado pelo dispositivo ou integração de configuração permitida. | Matriz por modelo/canal; não assumir que executar Linux no contêiner controla a VPN do host. | OS-07 |
+| Android (adiado) | VpnService ou APIs de VPN da plataforma; camada de integração com o núcleo Rust. | Consentimento, início/parada pelo sistema, estado, reconexão, importação e gestão de credenciais. | OS-04 |
+| iOS/iPadOS (adiado) | NetworkExtension/NEVPNManager e extensões de túnel permitidas. | App móvel e extensão assinada; protocolos somente depois de integração e testes reais. | OS-05 |
+| ChromeOS (posterior) | Avaliar app Android suportado pelo dispositivo ou integração de configuração permitida. | Matriz por modelo/canal; não assumir que executar Linux no contêiner controla a VPN do host. | OS-07 |
 | FreeBSD | Adaptadores locais e CLI; GUI só após validar dependências. | WireGuard/OpenVPN/IPsec conforme engines disponíveis e testes no sistema. | OS-08 |
 | OpenBSD / NetBSD | Pesquisa independente de APIs e engines. | Registrar quais operações podem ser implementadas; não herdar aprovação de FreeBSD. | OS-08 |
 | OpenWrt, roteadores Linux e NAS | CLI/serviço e integração de gerenciamento, conforme arquitetura e permissões do dispositivo. | Pacotes compatíveis e controle local/remoto autenticado; sem exigir GUI desktop. | OS-09 |
@@ -36,7 +36,7 @@ A integração proposta usa NetworkExtension e os recursos permitidos para o tip
 
 Não presumir que o app possa listar, editar ou comandar os perfis de todos os outros apps instalados. Qualquer integração delegada precisa de API autorizada do fabricante e do sistema. O frontend pode ser nativo, enquanto regras, modelos e parte das engines compartilham Rust; não exigir uma GUI GTK em um aparelho móvel.
 
-### Android
+### Android — referência para fase futura
 
 O VpnService requer consentimento do usuário, oferece integração com o sistema e limita a VPN ativa por usuário/perfil. Planejar corretamente serviço em foreground, notificação e ciclo de vida. O protocolo de túnel continua sendo responsabilidade da engine; há também APIs específicas de IKEv2. A distribuição pelo Google Play exige revisar a política de VpnService. [Guia Android](https://developer.android.com/develop/connectivity/vpn), [Ikev2VpnProfile](https://developer.android.com/reference/android/net/Ikev2VpnProfile), [política Google Play](https://support.google.com/googleplay/android-developer/answer/12564964).
 
@@ -50,15 +50,15 @@ Para BSD/embedded, a existência de uma implementação de engine não prova o f
 
 ## Núcleo compartilhado e adaptadores
 
-Estrutura-alvo, a validar por prova de conceito:
+Estrutura-alvo, a validar por prova de conceito. A bridge móvel está fora da fase atual:
 
 ```text
 modelos, perfis, validação e máquina de estados em Rust
                     |
        contrato de backend e eventos
           /          |
- NetworkManager  APIs/serviços  bridge móvel + extensão/serviço
- Linux/CLI        desktop       Android e Apple
+ NetworkManager  APIs/serviços  bridge móvel (fase futura)
+ Linux/CLI        Windows/macOS  Android e iOS
                     |
           engines ou clientes autorizados
 ```

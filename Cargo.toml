@@ -3,7 +3,13 @@ name = "vpn-manager"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["crates/vpn-manager-core", "crates/vpn-manager-networkmanager"]
+resolver = "3"
+
 [dependencies]
+vpn-manager-core = { path = "crates/vpn-manager-core" }
+vpn-manager-networkmanager = { path = "crates/vpn-manager-networkmanager" }
 gtk = { package = "gtk4", version = "0.10", features = ["v4_12"] }
 ksni = { version = "0.3", features = ["blocking"] }
 async-channel = "2"

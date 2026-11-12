@@ -1,9 +1,10 @@
 # Backlog — VPN Manager multiplataforma e multiprotocolo
 
-**Revisão:** 12/11/2026. **Estado:** planejamento; os itens pendentes não foram implementados por este levantamento.
+**Revisão:** 12/11/2026. **Estado:** planejamento com implementação inicial do núcleo; progresso parcial descrito abaixo.
 
-Objetivo: permitir gerenciar o maior conjunto viável de VPNs com uma interface simples e núcleo compartilhado em Rust, preservando baixo consumo e respeitando as capacidades de cada sistema. A meta principal cobre Linux, Windows, macOS, Android e iOS/iPadOS; plataformas adicionais entram por adaptadores e estudos específicos.
+Objetivo: permitir gerenciar o maior conjunto viável de VPNs com uma interface simples e núcleo compartilhado em Rust, preservando baixo consumo e respeitando as capacidades de cada sistema. O escopo atual é **Linux, Windows e macOS**. Android e iOS/iPadOS ficam adiados para uma fase futura, sem bloquear os marcos desktop. As demais plataformas permanecem como expansão posterior.
 
+- [Roadmap desktop com etapas e progresso](ROADMAP.md)
 - [Inventário de protocolos, fabricantes, mesh e provedores](docs/VPN-COMPATIBILITY.md)
 - [Sistemas operacionais, arquitetura e restrições](docs/PLATFORMS.md)
 
@@ -27,32 +28,45 @@ Essas entregas não equivalem a homologação de servidores reais. Hoje não há
 | P1 | Primeira cobertura de uso comum e plataformas principais. |
 | P2 | Ampliação de fabricantes, redes mesh e recursos específicos. |
 | P3 | Pesquisa, legado, nichos ou integrações sem interface pública comprovada. |
+| Adiado | Fora do escopo atual; retomar somente em uma fase futura. |
 | S / M / L / XL | Estimativa relativa: pequena, média, grande ou múltiplas tarefas. Não representa prazo prometido. |
-| Estado inicial | Todos os itens das tabelas abaixo estão **A fazer**. Estudos podem terminar como inviáveis, com evidência. |
+| Estado inicial | Itens sem progresso registrado continuam **A fazer**. CORE-01/02/03/04/06, AUTH-01, NET-01, UX-01, OS-06, QA-01/02/03/04 e REL-02 têm progresso parcial; seus critérios de aceite completos continuam pendentes. Estudos podem terminar como inviáveis, com evidência. |
 
 Cada item deve virar uma issue/PR com responsável, sistema e versão, dependências, cenário de teste e resultado. As tabelas são o backlog de referência; este documento não cria automaticamente dezenas de issues no GitHub.
 
 ## Primeira fila de execução
 
-- [ ] **CORE-01:** separar o núcleo Rust da interface e do backend Linux.
-- [ ] **CORE-02:** criar contrato de adaptadores e descoberta de capacidades.
-- [ ] **CORE-03:** substituir o estado binário por estados de conexão/autenticação.
-- [ ] **CORE-04:** definir formato de perfil versionado e migração.
-- [ ] **AUTH-01:** integrar armazenamento seguro e segredos por backend.
-- [ ] **AUTH-02:** definir desafios de login, MFA e navegador externo.
-- [ ] **QA-01:** montar laboratório de túneis, começando por OpenVPN/WireGuard.
+- [ ] **CORE-01 (em andamento):** núcleo separado com modelos, validação, estados, eventos e contratos; falta concluir a validação nativa e remover acoplamentos restantes dos fluxos de autenticação.
+- [ ] **CORE-02 (em andamento):** contrato de gestão completo e implementação Linux usada pela UI; inventário de plugins presente. Capacidades finas por protocolo/plugin continuam pendentes.
+- [ ] **CORE-03 (em andamento):** estados específicos lidos por D-Bus, eventos tipados e cancelamento com proteção contra ativação tardia; teste com barramento privado passou. Faltam autenticação real e reconexão.
+- [ ] **CORE-04 (em andamento):** TOML v2 com migração de referências v1, OpenVPN básico e rede IPv4/IPv6; validação de CA existente e rollback de criação. Faltam extensões e migrações de configurações adicionais.
+- [ ] **AUTH-01 (em andamento no Linux):** cofre opcional Secret Service, escolha explícita, buffers próprios com zeroize e credenciais por descritor anônimo; falta homologar cofres reais e outras plataformas.
+- [ ] **AUTH-02:** agente próprio e desafios MFA/SAML continuam pendentes; outros plugins delegam ao agente do ambiente.
+- [ ] **QA-01 (em andamento):** laboratório isolado OpenVPN/WireGuard passou com tráfego IPv4/IPv6, DNS e desligamento. Faltam IKEv2 e integração completa com NetworkManager.
 - [ ] **VPN-01 / VPN-02:** completar e homologar os dois protocolos existentes.
 - [ ] **OS-00:** provar o núcleo e comparar opções de interface por plataforma.
 - [ ] **FORT-01:** validar Fortinet SSL-VPN PPP em gateway de teste autorizado.
 - [ ] **FORT-02:** levantar e validar separadamente Fortinet IPsec/SAML.
 
-A ordem considera dependências; não impede estudos de Windows, Apple e Android em paralelo. Nenhum desses estudos deve interromper a versão Linux existente.
+Resultados, versões e limites: [VALIDATION.md](docs/VALIDATION.md).
+
+Progresso adicional: **CORE-06** tem inventário de plugins e identificação de `vpn.service-type`; versões das engines e capacidades finas permanecem pendentes. **QA-03** tem script e amostra local de consumo da GUI; faltam orçamento, bateria e outras plataformas. **REL-02** tem workflows sem publicação observada.  **UX-01** identifica conteúdo OpenVPN/WireGuard e rejeita conteúdo desconhecido/ambíguo; QR e assistentes permanecem pendentes. **OS-06** tem CLI sem GTK usando NetworkManager; serviço e funcionamento sem NetworkManager permanecem pendentes. **NET-01** preserva opções IPv4/IPv6 separadas no editor; homologação de tráfego/DNS e restauração permanecem pendentes.
+
+A ordem considera dependências entre núcleo e adaptadores desktop. Preservar o Linux existente durante a implementação de Windows e macOS. Não iniciar aplicativos, bridges, extensões, distribuição ou testes móveis nesta fase.
+
+## Fila desktop vigente
+
+1. **Linux:** concluir a integração do app com túneis reais via NetworkManager, estados/cancelamento/autenticação, cofre, DNS/IPv6 e reconexão; produzir pacote e matriz de suporte.
+2. **Windows:** implementar o adaptador e a separação entre interface e serviço, validar OpenVPN/WireGuard, cofre, eventos e permissões; depois completar GUI/bandeja, instalador e testes nativos.
+3. **macOS:** implementar o adaptador e o mecanismo de túnel escolhido, cofre e eventos; completar interface de menu, assinatura/distribuição e testes nativos.
+
+O núcleo compartilhado e os critérios de qualidade atendem aos três desktops. Decisões de interface e engines de Windows/macOS continuam pendentes de prova de conceito; não há aplicativo nativo pronto nessas plataformas. Android, iOS/iPadOS e o caminho Android de ChromeOS ficam fora desta fila.
 
 ## 1. Núcleo e backends
 
 | ID | Prioridade / esforço | Dependências | Entrega e aceite |
 | --- | --- | --- | --- |
-| CORE-01 | P0 / L | — | Separar modelos, validação, eventos e regras em crate Rust sem GTK/nmcli. Compilar o núcleo em Linux, Windows, macOS, Android e iOS; preservar os fluxos Linux. |
+| CORE-01 | P0 / L | — | Separar modelos, validação, eventos e regras em crate Rust sem GTK/nmcli. Compilar e testar o núcleo em Linux, Windows e macOS; preservar os fluxos Linux. Validação móvel fica para a fase futura. |
 | CORE-02 | P0 / L | CORE-01 | Contrato de backend para descobrir, criar/importar, editar, conectar, cancelar, desconectar, exportar e consultar estado. Capacidades e erros tipados por protocolo e plataforma; operação indisponível não vira botão que falha silenciosamente. |
 | CORE-03 | P0 / M | CORE-01 | Estados desconectado, preparando, autenticando, conectando, conectado, reconectando, encerrando e erro. Cancelamento determinístico, eventos sem polling contínuo e nenhuma indicação de “conectado” antes da confirmação do backend. |
 | CORE-04 | P0 / M | CORE-01 | Perfil versionado com campos comuns e extensões específicas. Validar importação, caminho de certificados e migração sem perder perfis existentes. Segredos ficam fora do arquivo público de perfil. |
@@ -88,10 +102,10 @@ Os limites e fontes de cada plataforma estão em [PLATFORMS.md](docs/PLATFORMS.m
 | OS-01 | P1 / L | CORE-02, CORE-05, AUTH-01 | Adaptador NetworkManager com eventos e agente de segredos. Homologar inicialmente família Debian/Ubuntu, Fedora e Arch/CachyOS, KDE/GNOME e Wayland/X11 em matriz explícita. |
 | OS-02 | P1 / XL | OS-00, CORE-05 | Windows: GUI/tray, serviço, permissões, instalação e remoção. Engines OpenVPN/WireGuard e API nativa IKEv2 em entregas distintas; validar x64/ARM64 e versões suportadas escolhidas. |
 | OS-03 | P1 / XL | OS-00, CORE-05 | macOS: app, menu, cofre, integração de túnel e assinatura/notarização. Confirmar entitlements, distribuição e engines; testar arquiteturas e versões que a release declarar. |
-| OS-04 | P1 / XL | OS-00, AUTH-01 | Android: bridge Rust, VpnService/APIs permitidas, consentimento, notificação e ciclo de vida. Importação móvel, QR, troca de rede e acesso por perfil de trabalho quando disponível. Validar em aparelho real. |
-| OS-05 | P1 / XL | OS-00, AUTH-01 | iOS/iPadOS: bridge, extensão de túnel, cofre e distribuição. Resolver conta/entitlements/regras de publicação antes de anunciar release. Testar dispositivo real e limites do sistema, sem presumir acesso a perfis de outros apps. |
+| OS-04 | Adiado / XL | OS-00, AUTH-01 | Android: bridge Rust, VpnService/APIs permitidas, consentimento, notificação e ciclo de vida. Importação móvel, QR, troca de rede e acesso por perfil de trabalho quando disponível. Validar em aparelho real. |
+| OS-05 | Adiado / XL | OS-00, AUTH-01 | iOS/iPadOS: bridge, extensão de túnel, cofre e distribuição. Resolver conta/entitlements/regras de publicação antes de anunciar release. Testar dispositivo real e limites do sistema, sem presumir acesso a perfis de outros apps. |
 | OS-06 | P2 / L | CORE-02, CORE-05 | CLI/serviço Linux sem sessão gráfica ou NetworkManager. Escolher adaptadores explícitos; estado e configuração funcionam sem iniciar GUI. |
-| OS-07 | P2 / M | OS-04 | ChromeOS: prova em dispositivos elegíveis e escopo da VPN no host. Distinguir app Android, recursos integrados e rede do contêiner Linux. Documentar indisponibilidade onde necessário. |
+| OS-07 | Adiado / M | OS-04 | ChromeOS: prova em dispositivos elegíveis e escopo da VPN no host. Distinguir app Android, recursos integrados e rede do contêiner Linux. Documentar indisponibilidade onde necessário. |
 | OS-08 | P3 / XL | CORE-02 | FreeBSD primeiro; OpenBSD/NetBSD por estudos separados. Escolher engines e adaptar serviço, cofre, rotas/DNS e pacotes; build isolado não conta como homologação. |
 | OS-09 | P3 / XL | OS-06 | OpenWrt/roteadores/NAS: CLI/serviço ou API do fabricante, conforme dispositivo. Validar arquitetura, armazenamento e capacidade de atualização; não exigir ambiente desktop. |
 | OS-10 | P3 / L | OS-06, CORE-05 | Painel web opcional de agente autorizado. Autenticação, pareamento, proteção de origem/CSRF e indicação do host controlado. Sem porta remota aberta por padrão nem alegação de VPN do sistema feita só pelo navegador. |
@@ -165,7 +179,7 @@ Contexto e referências: [inventário Fortinet](docs/VPN-COMPATIBILITY.md#fortic
 | M0 — Base extensível | Núcleo Rust, contrato de backend, estados, perfis e diagnóstico de capacidades. | CORE-01–05, AUTH-01, NET-01, QA-01 e decisões REL-01/OS-00 concluídos. |
 | M1 — Linux homologado | OpenVPN/WireGuard completos; início de IKEv2 e Fortinet. | Testes de túneis reais e matriz publicada para combinações entregues. Fortinet só recebe suporte depois de seu próprio aceite. |
 | M2 — Desktop multiplataforma | Linux, Windows e macOS com interface simples e engines testadas. | Pacotes e cenários homologados por sistema; sem exigir paridade de todos os protocolos no primeiro release. |
-| M3 — Mobile | Android e iOS/iPadOS com serviços/extensões e ciclo de vida próprios. | Dispositivos reais, autenticação, consumo e distribuição resolvidos. Bloqueios de publicação ficam visíveis. |
+| M3 — Mobile (adiado) | Android e iOS/iPadOS com serviços/extensões e ciclo de vida próprios. | Dispositivos reais, autenticação, consumo e distribuição resolvidos. Bloqueios de publicação ficam visíveis. |
 | M4 — Integrações ampliadas | Outros fabricantes, mesh, provedores e recursos de rede. | Cada conector passa por QA-02; integrações delegadas continuam identificadas como tal. |
 | M5 — Plataformas adicionais | BSD, ChromeOS e embedded conforme viabilidade. | Artefatos, manutenção e matriz próprios; estudos inviáveis registrados, sem promessa de universalidade. |
 
@@ -181,6 +195,6 @@ Contexto e referências: [inventário Fortinet](docs/VPN-COMPATIBILITY.md#fortic
 
 ## Dependências externas a obter
 
-Appliances/contas de teste de fabricantes, máquinas Windows/macOS, dispositivos Android/Apple, acesso a assinatura e canais de distribuição e decisões de licenciamento. Documentar o bloqueio na tarefa correspondente; não trocar uma dependência ausente por uma afirmação de compatibilidade.
+Nesta fase: appliances/contas de teste de fabricantes, máquinas Windows/macOS, assinatura e canais de distribuição desktop e decisões de licenciamento. Dispositivos e canais Android/iOS serão necessários apenas na fase móvel futura. Documentar o bloqueio na tarefa correspondente; não trocar uma dependência ausente por uma afirmação de compatibilidade.
 
 Não há previsão de prazo ou custo nesta pesquisa. Antes de iniciar cada item XL, dividi-lo em entregas por backend, plataforma e autenticação, com estimativa depois do protótipo.

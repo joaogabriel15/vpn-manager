@@ -6,6 +6,9 @@ if [[ ! -x target/release/vpn-manager ]]; then
   cargo build --release --locked
 fi
 install -Dm755 target/release/vpn-manager "$HOME/.local/bin/vpn-manager"
+if [[ -x target/release/vpn-manager-cli ]]; then
+  install -Dm755 target/release/vpn-manager-cli "$HOME/.local/bin/vpn-manager-cli"
+fi
 install -Dm644 packaging/vpn-manager.svg "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/vpn-manager.svg"
 for size in 16 22 24 32 48 64 128 256; do
   install -Dm644 "packaging/icons/vpn-manager-$size.png" "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/${size}x${size}/apps/vpn-manager.png"
