@@ -1,0 +1,19 @@
+[package]
+name = "vpn-manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10", features = ["v4_12"] }
+ksni = { version = "0.3", features = ["blocking"] }
+async-channel = "2"
+tempfile = "3"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = true
+codegen-units = 1
+
+[profile.dev]
+debug = 0

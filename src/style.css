@@ -1,0 +1,60 @@
+window, dialog { background: #1c1f24; color: #e4e6eb; font-family: "Noto Sans", sans-serif; font-size: 13px; }
+label { color: inherit; }
+headerbar { background: #23262c; color: #cdd2da; box-shadow: none; border-bottom: 1px solid #343840; min-height: 36px; padding: 0 8px; }
+button { background: #30353e; color: #e4e6eb; border: 1px solid #464d58; border-radius: 5px; padding: 7px 11px; min-height: 20px; box-shadow: none; text-shadow: none; font-weight: 500; }
+button:hover { background: #3b424d; border-color: #616b7a; }
+button:active { background: #272c34; }
+button:disabled { opacity: .45; }
+button:focus-visible, entry:focus-within { outline: 2px solid #8ab4e8; outline-offset: 1px; }
+button.primary { background: #416792; color: #ffffff; border-color: #638ab6; }
+button.primary:hover { background: #527da9; }
+button.disconnect { background: #30353e; border-color: #638f79; color: #b0d7be; }
+button.ghost { background: transparent; border-color: transparent; color: #b8c0cd; }
+button.ghost:hover { background: #343a44; }
+button.danger { color: #edb3b5; }
+button.danger:hover { background: #4c3237; border-color: #76515a; }
+headerbar button.window-control { min-width: 25px; min-height: 23px; padding: 3px; border-radius: 4px; margin: 3px 0 3px 4px; }
+headerbar button.close-control:hover { background: #74424a; }
+.small, .footer label { font-size: 11px; }
+.section-title, .profile-name { font-size: 14px; font-weight: 600; }
+.muted { color: #a0a8b5; font-size: 12px; }
+.connected { color: #9bd1af; }
+.connection-list { border: 1px solid #3a404b; border-radius: 6px; background: #23272e; }
+.connection { padding: 15px 14px; border-bottom: 1px solid #383e48; }
+.connection:last-child { border-bottom: none; }
+.connection:hover { background: #292e36; }
+.connection.active { background: #26332e; }
+.connection button.primary { min-width: 86px; }
+.connection menubutton > button { padding: 7px; }
+entry, passwordentry { background: #20242b; color: #e4e6eb; border: 1px solid #48505d; border-radius: 5px; padding: 8px 10px; min-height: 20px; box-shadow: none; }
+entry text { color: #e4e6eb; background: transparent; }
+.search-shell { background: #20242b; border: 1px solid #48505d; border-radius: 5px; padding: 0 10px; }
+.search-shell entry { background: transparent; border: none; box-shadow: none; padding: 8px 3px; }
+.search-shell entry:focus-within { outline: none; }
+.search-shell:focus-within { border-color: #8ab4e8; }
+.footer { border-top: 1px solid #343a43; padding: 10px 18px; }
+popover > contents { background: #292e36; color: #e4e6eb; border: 1px solid #4a5361; border-radius: 6px; padding: 4px; box-shadow: 0 3px 10px #00000040; }
+popover button { min-width: 150px; }
+popover checkbutton { margin: 8px; }
+checkbutton { color: #c3cbd7; }
+checkbutton check { background: #292f38; border: 1px solid #697587; border-radius: 3px; min-width: 16px; min-height: 16px; }
+checkbutton check:checked { background: #527da9; color: #ffffff; }
+.empty { padding: 35px 20px; }
+.empty-title { font-size: 14px; font-weight: 600; }
+spinner { color: #8ab4e8; }
+scrolledwindow { background: transparent; }
+scrollbar { background: transparent; border: none; }
+scrollbar slider { min-width: 6px; min-height: 6px; margin: 2px; border: none; border-radius: 5px; background: #515966; }
+textview, textview text { background: #20242b; color: #d0d7e2; }
+.form-label { color: #bbc4d2; font-size: 12px; font-weight: 500; margin-top: 5px; }
+notebook.frame { border: 1px solid #414957; border-radius: 5px; }
+notebook, notebook > stack, notebook > header { background: transparent; box-shadow: none; outline: none; }
+notebook > header { border-bottom: 1px solid #414957; padding: 0; }
+notebook > header > tabs > tab { background: transparent; color: #a2afc1; padding: 10px 13px; border: none; border-bottom: 2px solid transparent; }
+notebook > header > tabs > tab:checked { background: #303c4b; color: #d9e7fa; border-bottom-color: #8ab4e8; }
+.eyebrow { color: #a2afc1; font-size: 11px; font-weight: 500; }
+/* Dialog actions have their own padded, non-scrolling footer. */
+.modal-footer { padding: 16px 20px 20px; border-top: 1px solid #343a43; }
+.modal-footer flowboxchild { padding: 0; margin: 0; background: transparent; border: none; }
+.modal-footer button.modal-action { min-width: 96px; min-height: 24px; padding: 9px 14px; margin: 2px; }
+.modal-footer button.modal-action:focus-visible { outline-offset: 0; }

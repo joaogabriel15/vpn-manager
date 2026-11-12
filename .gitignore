@@ -1,0 +1,5 @@
+/target/
+*.log
+
+# Captura local: pode conter nomes de conexões privadas.
+/docs/interface.png
