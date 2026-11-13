@@ -18,7 +18,7 @@ Android e iOS/iPadOS ficam para uma fase futura. Os checks do núcleo Rust fora 
 
 ## Releases e Windows/macOS
 
-O workflow [Desktop releases](.github/workflows/release.yml) gera os quatro pacotes e checksums SHA-256. Execução manual gera artefatos; tags `v<versão do Cargo.toml>` publicam uma prerelease após todos os builds passarem. Consulte [instalação, limites e publicação](docs/DESKTOP-RELEASES.md).
+O workflow [Desktop releases](.github/workflows/release.yml) gera os quatro pacotes e checksums SHA-256. Cada push na `main` publica uma prerelease com tag única e vinculada ao commit após todos os builds passarem. Tags `v<versão do Cargo.toml>` também publicam; execução manual gera somente artefatos. Consulte [instalação, limites e publicação](docs/DESKTOP-RELEASES.md).
 
 Windows/macOS permitem buscar e listar as VPNs do sistema, solicitar conexão/desligamento e abrir as configurações nativas. A atualização do estado é manual. Credenciais/certificados são configurados no sistema; engines OpenVPN/WireGuard, importação, bandeja, eventos e agente MFA nessas plataformas permanecem pendentes. Windows sem assinatura Authenticode; macOS com assinatura ad hoc, sem notarização. O workflow ainda precisa de execução remota observada; compilação local cruzada não homologa conectividade.
 

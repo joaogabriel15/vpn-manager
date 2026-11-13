@@ -1,6 +1,6 @@
 # Releases desktop
 
-O workflow **Desktop releases** compila/testa Linux x86_64, Windows x86_64, macOS Intel e Apple Silicon em runners nativos. Execução manual gera artefatos para revisão, sem publicação. Um push de tag `v<versão do Cargo.toml>` gera e publica uma **prerelease** somente depois que os quatro builds passam e todos os arquivos/checksums são verificados. Os pacotes levam um inventário de dependências e seus arquivos de licença disponíveis; a decisão de licença do código do app permanece pendente em REL-01.
+O workflow **Desktop releases** compila/testa Linux x86_64, Windows x86_64, macOS Intel e Apple Silicon em runners nativos. Execução manual gera artefatos para revisão, sem publicação. Cada push na `main` e cada tag `v<versão do Cargo.toml>` gera e publica uma **prerelease** somente depois que os quatro builds passam e todos os arquivos/checksums são verificados. Os pacotes levam um inventário de dependências e seus arquivos de licença disponíveis; a decisão de licença do código do app permanece pendente em REL-01.
 
 ## Instalação
 
@@ -14,7 +14,13 @@ Windows/macOS têm interface simples com busca, atualização manual e ações d
 
 Linux/macOS: `shasum -a 256 <arquivo>` e compare com o `.sha256` da mesma release. No Windows: `Get-FileHash <arquivo> -Algorithm SHA256`. Checksums detectam corrupção; não substituem assinatura de código.
 
-## Gerar uma release
+## Publicação automática na main
+
+Cada push na `main` publica uma prerelease própria após os quatro builds e a verificação dos checksums passarem. A tag automática tem o formato `main-<execução>-<tentativa>-<commit-curto>` e aponta para o commit exato do push. Reexecuções recebem tags distintas, sem sobrescrever releases anteriores. Execuções de commits diferentes não se cancelam entre si.
+
+A versão dos binários e dos arquivos continua sendo a declarada no Cargo.toml; a tag identifica cada build automático sem alterar versões no código. Execução manual continua gerando somente artefatos, sem publicação.
+
+## Gerar uma release por versão
 
 1. Atualize as versões dos quatro pacotes Cargo, `Cargo.lock` e `docs/RELEASE-NOTES.md`.
 2. Envie as alterações e rode **Desktop releases** manualmente. Revise os quatro artefatos e teste as plataformas de destino.
