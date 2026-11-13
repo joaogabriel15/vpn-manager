@@ -1,6 +1,7 @@
 use vpn_manager_core::backend::{Backend, BackendError, ErrorKind, Operation};
 use vpn_manager_core::settings::{OpenVpnProfile, ProfileChanges, ProfileField};
 use vpn_manager_core::{ConnectionState, Profile, sort_profiles};
+pub mod desktop;
 mod events;
 mod inventory;
 mod management;
@@ -30,7 +31,7 @@ impl Backend for NetworkManager {
             Operation::Discover => true,
             Operation::Cancel => matches!(kind, "vpn" | "wireguard"),
             Operation::Create => kind == "openvpn",
-            Operation::Import => matches!(kind, "openvpn" | "wireguard" | "vpn-manager"),
+            Operation::Import => matches!(kind, "openvpn" | "wireguard" | "vpnc" | "vpn-manager"),
             Operation::Export => kind == "vpn",
             _ => matches!(kind, "vpn" | "wireguard"),
         }
@@ -41,7 +42,7 @@ impl Backend for NetworkManager {
     }
 
     async fn connect(&self, id: &str) -> Result<(), BackendError> {
-        management::require_vpn(id).await?;
+        management::ensure_engine(id).await?;
         execute(&["connection", "up", "uuid", id]).await.map(|_| ())
     }
 
@@ -293,7 +294,7 @@ async fn discover_profiles() -> Result<Vec<Profile>, BackendError> {
                 name: f[1].clone(),
                 kind: f[2].clone(),
                 protocol: if f[2] == "vpn" {
-                    let service = execute(&[
+                    let service = match execute(&[
                         "--escape",
                         "no",
                         "-g",
@@ -303,7 +304,12 @@ async fn discover_profiles() -> Result<Vec<Profile>, BackendError> {
                         "uuid",
                         &f[0],
                     ])
-                    .await?;
+                    .await
+                    {
+                        Ok(service) => service,
+                        Err(error) if error.kind == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(error),
+                    };
                     service
                         .trim()
                         .strip_prefix("org.freedesktop.NetworkManager.")
@@ -313,7 +319,11 @@ async fn discover_profiles() -> Result<Vec<Profile>, BackendError> {
                     "wireguard".into()
                 },
                 state: if f[3] == "yes" {
-                    active_state(&f[0], &f[2]).await?
+                    match active_state(&f[0], &f[2]).await {
+                        Ok(state) => state,
+                        Err(error) if error.kind == ErrorKind::NotFound => continue,
+                        Err(error) => return Err(error),
+                    }
                 } else {
                     ConnectionState::Disconnected
                 },
@@ -334,7 +344,7 @@ async fn activate_with_password(
     uuid: &str,
     password: Option<&str>,
 ) -> Result<String, BackendError> {
-    management::require_vpn(uuid).await?;
+    management::ensure_engine(uuid).await?;
     if let Some(password) = password {
         if password.contains(['\n', '\r']) {
             return Err(management::invalid(

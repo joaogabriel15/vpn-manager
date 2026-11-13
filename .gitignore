@@ -4,3 +4,5 @@ __pycache__/
 
 # Captura local: pode conter nomes de conexões privadas.
 /docs/interface.png
+
+/dist/

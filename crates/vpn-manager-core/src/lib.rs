@@ -9,6 +9,7 @@ pub mod auth;
 pub mod backend;
 pub mod import;
 pub mod profile;
+pub mod protocols;
 pub mod settings;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

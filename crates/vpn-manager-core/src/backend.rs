@@ -78,6 +78,9 @@ pub struct PluginInfo {
     pub service: String,
     pub engine_available: bool,
     pub auth_dialog_available: bool,
+    /// Presence of the installed libnm plugin library; not a guarantee of
+    /// import/export support or a usable graphical editor.
+    pub configuration_available: bool,
 }
 
 #[derive(Clone, Debug)]

@@ -3,7 +3,7 @@ use gio::prelude::*;
 use std::path::Path;
 use vpn_manager_core::{
     backend::{Backend, BackendError, ErrorKind},
-    import::detect_import,
+    import::{detect_import, validate_import_policy},
     settings::{OpenVpnProfile, ProfileChanges, ProfileField},
 };
 
@@ -30,6 +30,38 @@ pub(crate) async fn require_vpn(id: &str) -> Result<String, BackendError> {
         "vpn" | "wireguard" => Ok(kind.trim().into()),
         _ => Err(invalid("O identificador não pertence a um perfil VPN.")),
     }
+}
+
+pub(crate) async fn ensure_engine(id: &str) -> Result<(), BackendError> {
+    if require_vpn(id).await? != "vpn" {
+        return Ok(());
+    }
+    let service = execute(&[
+        "--escape",
+        "no",
+        "-g",
+        "vpn.service-type",
+        "connection",
+        "show",
+        "uuid",
+        id,
+    ])
+    .await?;
+    let report = NetworkManager.capabilities().await?;
+    if report
+        .plugins
+        .iter()
+        .any(|p| p.service == service.trim() && p.engine_available)
+    {
+        return Ok(());
+    }
+    Err(BackendError {
+        kind: ErrorKind::Unavailable,
+        message: format!(
+            "Plugin/engine {} não encontrado. Instale-o pelo gerenciador de pacotes e confira Recursos VPN disponíveis.",
+            vpn_manager_core::protocols::label(service.trim())
+        ),
+    })
 }
 
 pub(crate) fn field_name(field: ProfileField) -> &'static str {
@@ -140,10 +172,12 @@ pub async fn detect_file(
     path: &Path,
 ) -> Result<vpn_manager_core::import::ImportFormat, BackendError> {
     let text = read_configuration(path).await?;
-    detect_import(&text).map_err(|e| invalid(match e {
-        vpn_manager_core::import::DetectionError::Unknown => "Formato não reconhecido. Selecione uma configuração OpenVPN, WireGuard ou VPN Manager.",
-        vpn_manager_core::import::DetectionError::Ambiguous => "O arquivo mistura indicadores de OpenVPN e WireGuard. Revise a configuração.",
-    }))
+    let format = detect_import(&text).map_err(|e| invalid(match e {
+        vpn_manager_core::import::DetectionError::Unknown => "Formato não reconhecido. Selecione OpenVPN, WireGuard, Cisco PCF ou VPN Manager; para outros protocolos use o editor do Linux.",
+        vpn_manager_core::import::DetectionError::Ambiguous => "O arquivo mistura indicadores de formatos VPN diferentes. Revise a configuração.",
+    }))?;
+    validate_import_policy(&text, format).map_err(invalid)?;
+    Ok(format)
 }
 
 async fn read_configuration(path: &Path) -> Result<String, BackendError> {
@@ -177,6 +211,41 @@ async fn read_configuration(path: &Path) -> Result<String, BackendError> {
     Ok(text.into())
 }
 
+fn pcf_without_secrets(text: &str) -> Result<String, BackendError> {
+    let data = gio::glib::KeyFile::new();
+    data.load_from_data(
+        text.trim_start_matches('\u{feff}'),
+        gio::glib::KeyFileFlags::NONE,
+    )
+    .map_err(|_| invalid("Arquivo PCF inválido."))?;
+    // Rebuild instead of removing keys in place: duplicate secret keys must
+    // never survive serialization in any GLib version.
+    let clean = gio::glib::KeyFile::new();
+    for key in data
+        .keys("main")
+        .map_err(|_| invalid("Seção PCF principal ausente."))?
+    {
+        if matches!(
+            key.as_str(),
+            "UserPassword"
+                | "enc_UserPassword"
+                | "GroupPwd"
+                | "enc_GroupPwd"
+                | "SaveUserPassword"
+                | "X-NM-SaveGroupPassword"
+        ) {
+            continue;
+        }
+        let value = data
+            .value("main", &key)
+            .map_err(|_| invalid("Opção PCF inválida."))?;
+        clean.set_value("main", &key, &value);
+    }
+    clean.set_string("main", "SaveUserPassword", "0");
+    clean.set_string("main", "X-NM-SaveGroupPassword", "0");
+    Ok(clean.to_data().into())
+}
+
 pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
     let format = detect_file(path).await?;
     if format == vpn_manager_core::import::ImportFormat::ManagerProfile {
@@ -185,6 +254,35 @@ pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
                 .map_err(invalid)?;
         return NetworkManager.create_profile(&document).await.map(|_| ());
     }
+    if format != vpn_manager_core::import::ImportFormat::WireGuard {
+        let report = NetworkManager.capabilities().await?;
+        let service = format!("org.freedesktop.NetworkManager.{}", format.backend_name());
+        if !report
+            .plugins
+            .iter()
+            .any(|p| p.service == service && p.configuration_available)
+        {
+            return Err(invalid(
+                "A biblioteca de importação do plugin VPN não foi encontrada. Instale o plugin e suas ferramentas de configuração pelo gerenciador de pacotes.",
+            ));
+        }
+    }
+    // The vpnc importer can invoke cisco-decrypt with encrypted secrets as
+    // arguments. Deliberately import connection settings without credentials.
+    let private_pcf = if format == vpn_manager_core::import::ImportFormat::CiscoPcf {
+        use std::io::Write;
+        let text = pcf_without_secrets(&read_configuration(path).await?)?;
+        let mut file = tempfile::Builder::new()
+            .suffix(".pcf")
+            .tempfile()
+            .map_err(|_| invalid("Não foi possível preparar PCF privado."))?;
+        file.write_all(text.as_bytes())
+            .map_err(|_| invalid("Não foi possível preparar PCF privado."))?;
+        Some(file)
+    } else {
+        None
+    };
+    let path = private_pcf.as_ref().map_or(path, |file| file.path());
     execute(&[
         "connection",
         "import",
@@ -195,6 +293,7 @@ pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
     ])
     .await
     .map(|_| ())
+    .map_err(|error| BackendError { kind: error.kind, message: "O plugin não conseguiu importar o arquivo. Confira o formato e as opções no editor nativo; o conteúdo da configuração foi omitido deste erro.".into() })
 }
 
 pub(crate) async fn export(id: &str, path: &Path) -> Result<(), BackendError> {
@@ -216,8 +315,8 @@ pub(crate) async fn export(id: &str, path: &Path) -> Result<(), BackendError> {
             .map_err(|_| invalid("Não foi possível criar o arquivo de exportação."))?;
         file.write_all(data.as_bytes())
             .map_err(|_| invalid("Não foi possível escrever a exportação."))?;
-        file.persist(&path)
-            .map_err(|_| invalid("Não foi possível salvar a exportação."))?;
+        file.persist_noclobber(&path)
+            .map_err(|_| invalid("Não foi possível salvar a exportação. Escolha um arquivo novo; arquivos existentes não são sobrescritos."))?;
         Ok(())
     })
     .await
@@ -235,6 +334,106 @@ pub(crate) async fn cancel(id: &str) -> Result<(), BackendError> {
 mod tests {
     use super::*;
     use std::{cell::RefCell, io::Write};
+
+    #[test]
+    fn pcf_import_removes_passwords_before_handing_the_file_to_the_plugin() {
+        let source = "[main]\nHost=vpn.example.invalid\nGroupName=Synthetic\nDescription=Synthetic VPN\nUserPassword=private-duplicate\nUserPassword=private-user\nenc_UserPassword=private-encoded-user\nGroupPwd=private-group\nenc_GroupPwd=private-encoded-group\nSaveUserPassword=1\nX-NM-SaveGroupPassword=1\n";
+        let clean = pcf_without_secrets(source).unwrap();
+        assert!(!clean.contains("private-"));
+        let data = gio::glib::KeyFile::new();
+        data.load_from_data(&clean, gio::glib::KeyFileFlags::NONE)
+            .unwrap();
+        assert_eq!(data.string("main", "Host").unwrap(), "vpn.example.invalid");
+        assert_eq!(data.string("main", "GroupName").unwrap(), "Synthetic");
+        assert_eq!(data.string("main", "SaveUserPassword").unwrap(), "0");
+        assert_eq!(data.string("main", "X-NM-SaveGroupPassword").unwrap(), "0");
+    }
+
+    #[test]
+    #[ignore = "requires NetworkManager and permission to manage synthetic profiles; never activates tunnels"]
+    fn generic_plugin_profiles_keep_their_protocol_and_fail_early_when_engine_is_absent() {
+        struct Cleanup(Vec<String>);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                for id in &self.0 {
+                    let _ = std::process::Command::new("nmcli")
+                        .args(["connection", "delete", "uuid", id])
+                        .output();
+                }
+            }
+        }
+        let mut cleanup = Cleanup(Vec::new());
+        gio::glib::MainContext::new().block_on(async {
+            for protocol in [
+                "openconnect",
+                "fortisslvpn",
+                "strongswan",
+                "libreswan",
+                "l2tp",
+                "sstp",
+                "vpnc",
+                "pptp",
+                "ssh",
+                "iodine",
+                "synthetic-unavailable",
+            ] {
+                let id = gio::glib::uuid_string_random().to_string();
+                let name = format!("vpn-manager-plugin-test-{id}");
+                let service = format!("org.freedesktop.NetworkManager.{protocol}");
+                cleanup.0.push(id.clone());
+                execute(&[
+                    "connection",
+                    "add",
+                    "type",
+                    "vpn",
+                    "con-name",
+                    &name,
+                    "connection.uuid",
+                    &id,
+                    "vpn-type",
+                    &service,
+                    "connection.autoconnect",
+                    "no",
+                ])
+                .await
+                .unwrap();
+                let profile = NetworkManager
+                    .profiles()
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .find(|p| p.uuid == id)
+                    .unwrap();
+                assert_eq!(profile.protocol, protocol);
+                assert_eq!(
+                    profile.state,
+                    vpn_manager_core::ConnectionState::Disconnected
+                );
+                NetworkManager
+                    .update(
+                        &id,
+                        &ProfileChanges(vec![(ProfileField::Dns4, "192.0.2.53".into())]),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    NetworkManager.read(&id, ProfileField::Dns4).await.unwrap(),
+                    "192.0.2.53"
+                );
+                if protocol == "synthetic-unavailable" {
+                    assert_eq!(
+                        NetworkManager.connect(&id).await.unwrap_err().kind,
+                        ErrorKind::Unavailable
+                    );
+                    assert_eq!(
+                        NetworkManager.state(&id).await.unwrap(),
+                        vpn_manager_core::ConnectionState::Disconnected
+                    );
+                }
+                NetworkManager.remove(&id).await.unwrap();
+            }
+        });
+    }
 
     #[test]
     #[ignore = "requires NetworkManager, OpenVPN plugin and permission to manage synthetic profiles"]
@@ -319,6 +518,78 @@ mod tests {
                 NetworkManager.read(&id, ProfileField::Dns4).await.unwrap(),
                 "192.0.2.53"
             );
+            NetworkManager
+                .update(
+                    &id,
+                    &ProfileChanges(vec![
+                        (ProfileField::Routes4, "192.0.2.0/24 192.0.2.1 10".into()),
+                        (ProfileField::Routes6, "2001:db8::/32 2001:db8::1 20".into()),
+                    ]),
+                )
+                .await
+                .unwrap();
+            let routes4 = NetworkManager
+                .read(&id, ProfileField::Routes4)
+                .await
+                .unwrap();
+            let routes6 = NetworkManager
+                .read(&id, ProfileField::Routes6)
+                .await
+                .unwrap();
+            assert!(!routes4.is_empty() && !routes6.is_empty());
+            NetworkManager
+                .update(
+                    &id,
+                    &ProfileChanges(vec![
+                        (ProfileField::Routes4, routes4.clone()),
+                        (ProfileField::Routes6, routes6.clone()),
+                    ]),
+                )
+                .await
+                .unwrap();
+            let error = NetworkManager
+                .update(
+                    &id,
+                    &ProfileChanges(vec![
+                        (ProfileField::Dns4, "192.0.2.99".into()),
+                        (ProfileField::Routes4, "2001:db8::/32".into()),
+                    ]),
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(error.kind, ErrorKind::InvalidInput);
+            assert_eq!(
+                NetworkManager.read(&id, ProfileField::Dns4).await.unwrap(),
+                "192.0.2.53"
+            );
+            assert_eq!(
+                NetworkManager
+                    .read(&id, ProfileField::Routes4)
+                    .await
+                    .unwrap(),
+                routes4
+            );
+            NetworkManager
+                .update(
+                    &id,
+                    &ProfileChanges(vec![(ProfileField::Routes4, "".into())]),
+                )
+                .await
+                .unwrap();
+            assert!(
+                NetworkManager
+                    .read(&id, ProfileField::Routes4)
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(
+                NetworkManager
+                    .read(&id, ProfileField::Routes6)
+                    .await
+                    .unwrap(),
+                routes6
+            );
             let copy_name = format!("{name}-copy");
             NetworkManager.duplicate(&id, &copy_name).await.unwrap();
             let copy = crate::property(&copy_name, "connection.uuid")
@@ -339,6 +610,9 @@ mod tests {
                 use std::os::unix::fs::PermissionsExt;
                 assert_eq!(path.metadata().unwrap().permissions().mode() & 0o777, 0o600);
             }
+            let original = std::fs::read(&path).unwrap();
+            assert!(NetworkManager.export(&id, &path).await.is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
             assert_eq!(
                 detect_file(&path).await.unwrap(),
                 vpn_manager_core::import::ImportFormat::OpenVpn
@@ -375,12 +649,15 @@ mod tests {
                 }),
                 network: Some(vpn_manager_core::profile::NetworkConfiguration {
                     ipv4: vpn_manager_core::profile::IpConfiguration {
-                        routes: vec!["not-a-route".into()],
+                        routes: vec!["192.0.2.0/24 unsupported-test-attribute=1".into()],
                         ..Default::default()
                     },
                     ipv6: Default::default(),
                 }),
             };
+            // Core validation accepts the common syntax. The daemon rejects the
+            // unsupported attribute after creation, exercising actual rollback.
+            document.validate().unwrap();
             assert!(NetworkManager.create_profile(&document).await.is_err());
             let leftovers: Vec<_> = NetworkManager
                 .profiles()

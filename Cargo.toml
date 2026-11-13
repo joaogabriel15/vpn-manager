@@ -1,19 +1,22 @@
 [package]
 name = "vpn-manager"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [workspace]
-members = ["crates/vpn-manager-core", "crates/vpn-manager-networkmanager"]
+members = ["crates/vpn-manager-core", "crates/vpn-manager-networkmanager", "crates/vpn-manager-native"]
 resolver = "3"
 
-[dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 vpn-manager-core = { path = "crates/vpn-manager-core" }
 vpn-manager-networkmanager = { path = "crates/vpn-manager-networkmanager" }
 gtk = { package = "gtk4", version = "0.10", features = ["v4_12"] }
 ksni = { version = "0.3", features = ["blocking"] }
 async-channel = "2"
 tempfile = "3"
+
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+vpn-manager-native = { path = "crates/vpn-manager-native", features = ["gui"] }
 
 [profile.release]
 opt-level = "s"

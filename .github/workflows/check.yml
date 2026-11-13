@@ -3,15 +3,32 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  native-core:
+  native-desktop:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest, macos-latest]
+        os: [windows-2022, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test -p vpn-manager-core --locked
+        with:
+          components: clippy
+      - run: cargo test -p vpn-manager-core -p vpn-manager-native --all-features --locked
+      - run: cargo clippy -p vpn-manager -p vpn-manager-native --all-targets --all-features --locked -- -D warnings
+      - run: cargo build -p vpn-manager -p vpn-manager-native --locked
+      - name: Windows profile discovery (no activation)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/windows-native.ps1 -Cli ./target/debug/vpn-manager-native-cli.exe
+      - name: macOS inventory (no activation)
+        if: runner.os == 'macOS'
+        run: ./target/debug/vpn-manager-native-cli list
   core:
     runs-on: ubuntu-latest
     strategy:
@@ -31,8 +48,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev python3-gi dbus-daemon
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev python3-gi dbus-daemon dbus-x11 xvfb network-manager-openvpn
       - run: cargo fmt --all -- --check
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: python3 tests/states.py
+      - run: python3 tests/release-packaging.py
+      - run: cargo clippy -p vpn-manager-native --all-targets --features gui --locked -- -D warnings
+      - run: cargo build --locked -p vpn-manager
+      - name: Save and reuse password in isolated GUI fixture
+        run: dbus-run-session -- xvfb-run -a python3 tests/saved-login.py --binary target/debug/vpn-manager

@@ -235,5 +235,20 @@ mod tests {
             ProfileDocument::from_toml(&format!("{fixture}password='synthetic-secret'\n")).is_err()
         );
         assert!(ProfileDocument::from_toml(&fixture.replace("version=2", "version=1")).is_err());
+        let valid_routes = format!(
+            "{fixture}\n[network.ipv4]\nroutes=['192.0.2.0/24 192.0.2.1 10']\n[network.ipv6]\nroutes=['2001:db8::/32']\n"
+        );
+        let document = ProfileDocument::from_toml(&valid_routes).unwrap();
+        assert_eq!(
+            ProfileDocument::from_toml(&document.to_toml().unwrap()).unwrap(),
+            document
+        );
+        for invalid in ["192.0.2.0/33", "2001:db8::/32", "private-gateway.invalid"] {
+            let error = ProfileDocument::from_toml(
+                &valid_routes.replace("192.0.2.0/24 192.0.2.1 10", invalid),
+            )
+            .unwrap_err();
+            assert!(!error.contains(invalid));
+        }
     }
 }

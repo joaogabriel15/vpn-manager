@@ -131,9 +131,11 @@ mod tests {
         std::fs::write(
             &tool,
             r#"#!/usr/bin/env python3
-import pathlib, sys
+import hashlib, pathlib, sys
 assert 'synthetic-password' not in sys.argv
-store = pathlib.Path(__file__).with_name('secret')
+attributes = sys.argv[3:] if sys.argv[1] == 'store' else sys.argv[2:]
+key = hashlib.sha256('\0'.join(attributes).encode()).hexdigest()
+store = pathlib.Path(__file__).with_name('secret-' + key)
 if sys.argv[1] == 'store':
     store.write_text(sys.stdin.read())
 elif sys.argv[1] == 'lookup':
@@ -155,6 +157,13 @@ else:
                 .save_openvpn("fixture-id", &Secret::new("synthetic-password".into()))
                 .await
                 .unwrap();
+            assert!(
+                vault
+                    .lookup_openvpn("different-profile-or-account")
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
             assert_eq!(
                 vault
                     .lookup_openvpn("fixture-id")

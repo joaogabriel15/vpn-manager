@@ -1,0 +1,120 @@
+name: Desktop releases
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            rustflags: '-C target-feature=+crt-static'
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy, rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate release version
+        shell: python
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          import os, tomllib
+          version = tomllib.load(open('Cargo.toml', 'rb'))['package']['version']
+          ref = os.environ['RELEASE_REF']
+          if ref.startswith('refs/tags/') and ref != 'refs/tags/v' + version:
+              raise SystemExit('Tag must match Cargo.toml: v' + version)
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev python3-gi dbus-daemon dbus-x11 xvfb network-manager-openvpn
+      - run: cargo fmt --all -- --check
+      - run: python tests/release-packaging.py
+      - name: Linux checks and build
+        if: runner.os == 'Linux'
+        run: |
+          cargo test --workspace --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo build --release --locked --target ${{ matrix.target }} -p vpn-manager -p vpn-manager-networkmanager
+      - name: Saved password GUI flow (isolated)
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- xvfb-run -a python3 tests/saved-login.py --binary target/${{ matrix.target }}/release/vpn-manager
+      - name: Windows and macOS checks and build
+        if: runner.os != 'Linux'
+        run: |
+          cargo test -p vpn-manager-core -p vpn-manager-native --all-features --locked
+          cargo clippy -p vpn-manager -p vpn-manager-native --all-features --all-targets --locked -- -D warnings
+      - name: Windows and macOS build
+        if: runner.os != 'Linux'
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags || '' }}
+        run: cargo build --release --locked --target ${{ matrix.target }} -p vpn-manager -p vpn-manager-native
+      - name: CLI smoke (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          & target/${{ matrix.target }}/release/vpn-manager-native-cli.exe --version
+          & target/${{ matrix.target }}/release/vpn-manager-native-cli.exe --help
+      - name: Windows profile discovery (no activation)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/windows-native.ps1 -Cli ./target/${{ matrix.target }}/release/vpn-manager-native-cli.exe
+      - name: CLI smoke (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          target/${{ matrix.target }}/release/vpn-manager-native-cli --version
+          target/${{ matrix.target }}/release/vpn-manager-native-cli --help
+          target/${{ matrix.target }}/release/vpn-manager-native-cli list
+      - name: Package
+        run: python scripts/package-release.py --target ${{ matrix.target }} --binary-dir target/${{ matrix.target }}/release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Verify complete set and checksums
+        run: python scripts/verify-release.py dist
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft --prerelease --title "VPN Manager $RELEASE_TAG" --notes-file docs/RELEASE-NOTES.md
+          gh release edit "$RELEASE_TAG" --draft=false

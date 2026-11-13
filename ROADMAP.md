@@ -2,7 +2,7 @@
 
 Atualizado em **12/11/2026**. Escopo atual: **Linux, Windows e macOS**. Android e iOS/iPadOS ficam para uma fase futura.
 
-O aplicativo disponível hoje é Linux. Windows e macOS ainda precisam de adaptadores, interface, instalação e testes próprios. Compilar o núcleo Rust nessas plataformas não equivale a entregar um aplicativo nativo.
+Linux mantém GTK/NetworkManager. Windows/macOS agora têm interface e CLI iniciais para perfis VPN do sistema, com atualização manual e autenticação configurada no próprio sistema. O workflow empacota os quatro targets; builds nativos remotos e túneis reais ainda precisam de evidência. Veja [as releases desktop](docs/DESKTOP-RELEASES.md).
 
 ## Visão geral
 
@@ -10,10 +10,10 @@ O aplicativo disponível hoje é Linux. Windows e macOS ainda precisam de adapta
 | --- | --- | --- |
 | 1. Base desktop compartilhada | Modelos, perfis, validação, estados, contratos e eventos em Rust | Em andamento; app Linux já usa o núcleo |
 | 2. Linux completo | OpenVPN/WireGuard pelo app, autenticação, reconexão, DNS/IPv6 e instalação validados | Em andamento; testes de engines e integração sintética passaram |
-| 3. Windows | Aplicativo com bandeja, backend/serviço, cofre e instalador | Planejado; implementação nativa pendente |
-| 4. macOS | Aplicativo com menu, mecanismo de túnel, cofre e distribuição assinada | Planejado; implementação nativa pendente |
+| 3. Windows | Aplicativo com bandeja, backend/serviço, cofre e instalador | Inicial; interface/CLI e adaptador de perfis nativos, sem homologação de túnel |
+| 4. macOS | Aplicativo com menu, mecanismo de túnel, cofre e distribuição assinada | Inicial; interface/CLI e adaptador de perfis nativos, sem homologação de túnel |
 | 5. Mais protocolos e gateways | IKEv2 e conectores empresariais homologados por combinação | Planejado; Fortinet tem cenários separados |
-| 6. Releases desktop | Pacotes reproduzíveis, matriz de suporte, atualização e desinstalação | CI inicial disponível; empacotamento e publicação pendentes |
+| 6. Releases desktop | Pacotes reproduzíveis, matriz de suporte, atualização e desinstalação | Workflow de pacotes e prereleases por tag implementado; execução remota pendente |
 
 O trabalho compartilhado atende aos três desktops. Provas de conceito de Windows e macOS podem avançar enquanto o Linux é concluído. Cada release depende de sua própria validação. Não há datas de entrega definidas.
 
@@ -39,7 +39,7 @@ Referências: CORE-01–06, AUTH-02 e OS-00 no [backlog](BACKLOG.md).
 - [x] Atualizar por eventos, sem consultas periódicas de estado em repouso.
 - [x] Ler e testar os estados específicos de VPN por D-Bus, incluindo preparação, autenticação e falha, além de validar assinatura e encerramento dos sinais em barramento privado.
 - [x] Implementar cancelamento e testar ativação tardia com adaptador simulado.
-- [x] Adicionar cofre opcional Secret Service, com escolha explícita de lembrar a senha OpenVPN.
+- [x] Adicionar cofre opcional Secret Service, com salvamento padrão da senha OpenVPN e opção de uso único.
 - [x] Transmitir a senha OpenVPN por descritor de arquivo anônimo 0600.
 - [x] Preservar opções independentes de IPv4 e IPv6 no editor.
 - [x] Testar túneis OpenVPN/WireGuard isolados com IPv4, IPv6, DNS e desligamento.
@@ -55,6 +55,9 @@ Critério de conclusão: os fluxos acima passam pelo app, com versões e evidên
 
 ## 3. Implementar Windows
 
+- [x] Interface/CLI para listar e solicitar conexão/desligamento de perfis VPN do usuário via ferramentas Windows; pacote ZIP portátil.
+- [x] Teste sintético de descoberta e limpeza de perfil na CI, sem ativar túnel (execução remota pendente).
+
 - [ ] Provar o adaptador e a integração autorizada com engines OpenVPN/WireGuard.
 - [ ] Implementar serviço e comunicação autenticada com privilégios mínimos.
 - [ ] Integrar cofre, eventos, cancelamento, DNS/rotas e reconexão.
@@ -63,9 +66,11 @@ Critério de conclusão: os fluxos acima passam pelo app, com versões e evidên
 - [ ] Testar login, tráfego, IPv6/DNS, queda do serviço e ciclo de vida em Windows real.
 - [ ] Publicar as versões e arquiteturas efetivamente homologadas.
 
-Referências: OS-02, CORE-05, AUTH-01, NET-01/03 e REL-01–03. A escolha da interface continua dependente da prova de conceito.
+Referências: OS-02, CORE-05, AUTH-01, NET-01/03 e REL-01–03. Interface inicial eframe/egui; consumo e acessibilidade nativos ainda precisam de medição.
 
 ## 4. Implementar macOS
+
+- [x] Interface/CLI para perfis VPN expostos por `scutil --nc`, com pacote `.app` para Intel e Apple Silicon e assinatura ad hoc.
 
 - [ ] Provar o adaptador e escolher o mecanismo de túnel e a distribuição permitidos para cada protocolo.
 - [ ] Definir integração entre núcleo Rust, aplicação e componentes do sistema.
@@ -88,6 +93,8 @@ Referências: OS-03, CORE-05, AUTH-01, NET-01/03 e REL-01–03. Requisitos de di
 Cada combinação de protocolo, engine, sistema, autenticação e gateway precisa de evidência própria. Plugin instalado ou protocolo semelhante não significa suporte homologado ao produto. Consulte o [inventário](docs/VPN-COMPATIBILITY.md).
 
 ## 6. Distribuir e manter
+
+- [x] Automatizar pacotes Linux/Windows/macOS e checksums; tags publicam prereleases após a matriz completa passar. Execução remota pendente.
 
 - [ ] Definir licença do projeto e inventário de licenças das dependências/engines.
 - [ ] Publicar matriz de suporte com limitações e testes reproduzíveis.

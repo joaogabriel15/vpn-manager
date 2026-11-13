@@ -1,10 +1,11 @@
 # Backlog — VPN Manager multiplataforma e multiprotocolo
 
-**Revisão:** 12/11/2026. **Estado:** planejamento com implementação inicial do núcleo; progresso parcial descrito abaixo.
+**Revisão:** 13/11/2026. **Estado:** planejamento com implementação inicial do núcleo; progresso parcial descrito abaixo.
 
 Objetivo: permitir gerenciar o maior conjunto viável de VPNs com uma interface simples e núcleo compartilhado em Rust, preservando baixo consumo e respeitando as capacidades de cada sistema. O escopo atual é **Linux, Windows e macOS**. Android e iOS/iPadOS ficam adiados para uma fase futura, sem bloquear os marcos desktop. As demais plataformas permanecem como expansão posterior.
 
 - [Roadmap desktop com etapas e progresso](ROADMAP.md)
+- [Cobertura implementada no Linux e seus limites](docs/LINUX-VPN-SUPPORT.md)
 - [Inventário de protocolos, fabricantes, mesh e provedores](docs/VPN-COMPATIBILITY.md)
 - [Sistemas operacionais, arquitetura e restrições](docs/PLATFORMS.md)
 
@@ -30,7 +31,7 @@ Essas entregas não equivalem a homologação de servidores reais. Hoje não há
 | P3 | Pesquisa, legado, nichos ou integrações sem interface pública comprovada. |
 | Adiado | Fora do escopo atual; retomar somente em uma fase futura. |
 | S / M / L / XL | Estimativa relativa: pequena, média, grande ou múltiplas tarefas. Não representa prazo prometido. |
-| Estado inicial | Itens sem progresso registrado continuam **A fazer**. CORE-01/02/03/04/06, AUTH-01, NET-01, UX-01, OS-06, QA-01/02/03/04 e REL-02 têm progresso parcial; seus critérios de aceite completos continuam pendentes. Estudos podem terminar como inviáveis, com evidência. |
+| Estado inicial | Itens sem progresso registrado continuam **A fazer**. CORE-01/02/03/04/06, AUTH-01, NET-01, UX-01, OS-00/02/03/06, QA-01/02/03/04 e REL-02 têm progresso parcial; seus critérios de aceite completos continuam pendentes. Estudos podem terminar como inviáveis, com evidência. |
 
 Cada item deve virar uma issue/PR com responsável, sistema e versão, dependências, cenário de teste e resultado. As tabelas são o backlog de referência; este documento não cria automaticamente dezenas de issues no GitHub.
 
@@ -40,8 +41,8 @@ Cada item deve virar uma issue/PR com responsável, sistema e versão, dependên
 - [ ] **CORE-02 (em andamento):** contrato de gestão completo e implementação Linux usada pela UI; inventário de plugins presente. Capacidades finas por protocolo/plugin continuam pendentes.
 - [ ] **CORE-03 (em andamento):** estados específicos lidos por D-Bus, eventos tipados e cancelamento com proteção contra ativação tardia; teste com barramento privado passou. Faltam autenticação real e reconexão.
 - [ ] **CORE-04 (em andamento):** TOML v2 com migração de referências v1, OpenVPN básico e rede IPv4/IPv6; validação de CA existente e rollback de criação. Faltam extensões e migrações de configurações adicionais.
-- [ ] **AUTH-01 (em andamento no Linux):** cofre opcional Secret Service, escolha explícita, buffers próprios com zeroize e credenciais por descritor anônimo; falta homologar cofres reais e outras plataformas.
-- [ ] **AUTH-02:** agente próprio e desafios MFA/SAML continuam pendentes; outros plugins delegam ao agente do ambiente.
+- [ ] **AUTH-01 (em andamento no Linux):** cofre Secret Service com salvamento padrão e opção de uso único, buffers próprios com zeroize e credenciais por descritor anônimo; falta homologar cofres reais e outras plataformas.
+- [ ] **AUTH-02 (parcial):** agente próprio e desafios MFA/SAML continuam pendentes; plugins delegam ao agente do ambiente, com login interativo opcional nmcli --ask sem credenciais nos argumentos.
 - [ ] **QA-01 (em andamento):** laboratório isolado OpenVPN/WireGuard passou com tráfego IPv4/IPv6, DNS e desligamento. Faltam IKEv2 e integração completa com NetworkManager.
 - [ ] **VPN-01 / VPN-02:** completar e homologar os dois protocolos existentes.
 - [ ] **OS-00:** provar o núcleo e comparar opções de interface por plataforma.
@@ -50,7 +51,7 @@ Cada item deve virar uma issue/PR com responsável, sistema e versão, dependên
 
 Resultados, versões e limites: [VALIDATION.md](docs/VALIDATION.md).
 
-Progresso adicional: **CORE-06** tem inventário de plugins e identificação de `vpn.service-type`; versões das engines e capacidades finas permanecem pendentes. **QA-03** tem script e amostra local de consumo da GUI; faltam orçamento, bateria e outras plataformas. **REL-02** tem workflows sem publicação observada.  **UX-01** identifica conteúdo OpenVPN/WireGuard e rejeita conteúdo desconhecido/ambíguo; QR e assistentes permanecem pendentes. **OS-06** tem CLI sem GTK usando NetworkManager; serviço e funcionamento sem NetworkManager permanecem pendentes. **NET-01** preserva opções IPv4/IPv6 separadas no editor; homologação de tráfego/DNS e restauração permanecem pendentes.
+Progresso adicional: **CORE-06** tem catálogo de 12 famílias, plugins adicionais por serviço, bibliotecas/helpers e verificação de engine antes de conectar; versões e capacidades finas de import/export continuam pendentes. **QA-03** tem script e amostra local de consumo da GUI; faltam orçamento, bateria e outras plataformas. **REL-02** gera pacotes/checksums Linux x64, Windows x64 e macOS Intel/ARM por workflow e publica prereleases por tag; execução remota e publicação ainda não observadas. **OS-02/03** têm GUI/CLI iniciais para VPNs do sistema, sem engines OpenVPN/WireGuard próprias, eventos ou homologação de túneis.  **UX-01** identifica OpenVPN/WireGuard/Cisco PCF, remove senhas PCF e rejeita conteúdo desconhecido/ambíguo e hooks executáveis; QR e assistentes permanecem pendentes. **OS-06** tem CLI sem GTK usando NetworkManager; serviço e funcionamento sem NetworkManager permanecem pendentes. **NET-01** preserva opções IPv4/IPv6 separadas no editor e valida destino, prefixo, gateway e métrica das rotas no núcleo; homologação de tráfego/DNS e restauração permanecem pendentes.
 
 A ordem considera dependências entre núcleo e adaptadores desktop. Preservar o Linux existente durante a implementação de Windows e macOS. Não iniciar aplicativos, bridges, extensões, distribuição ou testes móveis nesta fase.
 
@@ -60,7 +61,7 @@ A ordem considera dependências entre núcleo e adaptadores desktop. Preservar o
 2. **Windows:** implementar o adaptador e a separação entre interface e serviço, validar OpenVPN/WireGuard, cofre, eventos e permissões; depois completar GUI/bandeja, instalador e testes nativos.
 3. **macOS:** implementar o adaptador e o mecanismo de túnel escolhido, cofre e eventos; completar interface de menu, assinatura/distribuição e testes nativos.
 
-O núcleo compartilhado e os critérios de qualidade atendem aos três desktops. Decisões de interface e engines de Windows/macOS continuam pendentes de prova de conceito; não há aplicativo nativo pronto nessas plataformas. Android, iOS/iPadOS e o caminho Android de ChromeOS ficam fora desta fila.
+O núcleo compartilhado e os critérios de qualidade atendem aos três desktops. Windows/macOS têm interface inicial eframe/egui e adaptadores delegados para perfis VPN do sistema. Engines próprias, medições da UI, serviço/cofre, distribuição assinada e homologação continuam pendentes. Android, iOS/iPadOS e o caminho Android de ChromeOS ficam fora desta fila.
 
 ## 1. Núcleo e backends
 
@@ -77,7 +78,7 @@ O núcleo compartilhado e os critérios de qualidade atendem aos três desktops.
 
 | ID | Prioridade / esforço | Dependências | Entrega e aceite |
 | --- | --- | --- | --- |
-| AUTH-01 | P0 / L | CORE-01, CORE-05 | Cofre nativo por OS e escolha explícita de lembrar credenciais. Mapear segredos esperados por cada backend, sem assumir `vpn.secrets.password`. Cancelar/expirar login elimina material transitório; logs e argumentos de processo não contêm segredos. |
+| AUTH-01 | P0 / L | CORE-01, CORE-05 | Cofre nativo por OS, salvamento padrão e opção explícita de uso único, conforme pedido do proprietário. Mapear segredos esperados por cada backend, sem assumir `vpn.secrets.password`. Cancelar/expirar login elimina material transitório; logs e argumentos de processo não contêm segredos. |
 | AUTH-02 | P1 / XL | AUTH-01, CORE-03 | Contrato de desafios: OTP/PIN, troca de senha, grupos, cookies e login no navegador SAML/OIDC quando exposto pelo backend. Testar sucesso, negação, timeout e cancelamento. Não tratar MFA como uma segunda senha fixa. |
 | AUTH-03 | P1 / L | AUTH-01 | Certificado CA/cliente, chave criptografada, PKCS#12 e pesquisa de PKCS#11/smart card. Seleção de arquivos, validação de identidade e erros claros; homologar somente os formatos efetivamente integrados. |
 | NET-01 | P0 / L | CORE-02 | Rotas IPv4/IPv6, DNS por domínio e túnel dividido com leitura, aplicação e restauração. Não substituir opções do outro protocolo nem apagar configurações de redes alheias. Testes reais de resolução e tráfego. |
