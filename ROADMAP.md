@@ -1,8 +1,8 @@
 # Roadmap do VPN Manager
 
-Atualizado em **12/11/2026**. Escopo atual: **Linux, Windows e macOS**. Android e iOS/iPadOS ficam para uma fase futura.
+Atualizado em **15/11/2026**. Escopo atual: **Linux, Windows e macOS**. Android e iOS/iPadOS ficam para uma fase futura.
 
-Linux mantém GTK/NetworkManager. Windows/macOS agora têm interface e CLI iniciais para perfis VPN do sistema, com atualização manual e autenticação configurada no próprio sistema. O workflow empacota os quatro targets; builds nativos remotos e túneis reais ainda precisam de evidência. Veja [as releases desktop](docs/DESKTOP-RELEASES.md).
+Linux mantém GTK/NetworkManager. Windows/macOS agora têm interface e CLI iniciais para perfis VPN do sistema, com atualização manual e autenticação configurada no próprio sistema. O workflow empacota os quatro targets e publicou a prerelease `main-3-1-5b37fa4` em 15/11/2026; túneis reais ainda precisam de evidência. Veja [as releases desktop](docs/DESKTOP-RELEASES.md).
 
 ## Visão geral
 
@@ -13,7 +13,7 @@ Linux mantém GTK/NetworkManager. Windows/macOS agora têm interface e CLI inici
 | 3. Windows | Aplicativo com bandeja, backend/serviço, cofre e instalador | Inicial; interface/CLI e adaptador de perfis nativos, sem homologação de túnel |
 | 4. macOS | Aplicativo com menu, mecanismo de túnel, cofre e distribuição assinada | Inicial; interface/CLI e adaptador de perfis nativos, sem homologação de túnel |
 | 5. Mais protocolos e gateways | IKEv2 e conectores empresariais homologados por combinação | Planejado; Fortinet tem cenários separados |
-| 6. Releases desktop | Pacotes reproduzíveis, matriz de suporte, atualização e desinstalação | Workflow de pacotes e prereleases por tag implementado; execução remota pendente |
+| 6. Releases desktop | Pacotes reproduzíveis, matriz de suporte, atualização e desinstalação | Workflow de pacotes e prereleases executado com sucesso na CI |
 
 O trabalho compartilhado atende aos três desktops. Provas de conceito de Windows e macOS podem avançar enquanto o Linux é concluído. Cada release depende de sua própria validação. Não há datas de entrega definidas.
 
@@ -25,7 +25,7 @@ O trabalho compartilhado atende aos três desktops. Provas de conceito de Window
 - [x] Criar TOML v2 para referências e OpenVPN básico, com migração das referências v1.
 - [x] Validar campos e remover o perfil recém-criado quando a aplicação de rede falha.
 - [x] Adicionar CI para núcleo nativo em Linux/Windows/macOS e checks dos targets desktop.
-- [ ] Validar a execução da CI nos três sistemas.
+- [x] Validar a execução da CI nos três sistemas.
 - [ ] Concluir capacidades por protocolo, estados de autenticação e contratos de desafios.
 - [ ] Ampliar o perfil versionado para as configurações adicionais necessárias.
 - [ ] Definir a estratégia de interface e a fronteira entre GUI e operações privilegiadas de cada desktop.
@@ -56,7 +56,7 @@ Critério de conclusão: os fluxos acima passam pelo app, com versões e evidên
 ## 3. Implementar Windows
 
 - [x] Interface/CLI para listar e solicitar conexão/desligamento de perfis VPN do usuário via ferramentas Windows; pacote ZIP portátil.
-- [x] Teste sintético de descoberta e limpeza de perfil na CI, sem ativar túnel (execução remota pendente).
+- [x] Teste sintético de descoberta e limpeza de perfil na CI, sem ativar túnel (passou no Windows Server 2022 da CI).
 
 - [ ] Provar o adaptador e a integração autorizada com engines OpenVPN/WireGuard.
 - [ ] Implementar serviço e comunicação autenticada com privilégios mínimos.
@@ -94,7 +94,7 @@ Cada combinação de protocolo, engine, sistema, autenticação e gateway precis
 
 ## 6. Distribuir e manter
 
-- [x] Automatizar pacotes Linux/Windows/macOS e checksums; tags publicam prereleases após a matriz completa passar. Execução remota pendente.
+- [x] Automatizar pacotes Linux/Windows/macOS e checksums; pushes na main e tags publicam prereleases após a matriz completa passar (primeira publicação em 15/11/2026).
 
 - [ ] Definir licença do projeto e inventário de licenças das dependências/engines.
 - [ ] Publicar matriz de suporte com limitações e testes reproduzíveis.
