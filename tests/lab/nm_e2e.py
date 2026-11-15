@@ -105,8 +105,8 @@ def main():
                 public = ctr("run", "--rm", "-i", "--network", "none", "--entrypoint", "wg", SERVER_IMAGE, "pubkey", input=private + "\n").stdout.strip()
                 keys[role] = private, public
             write("wireguard-server.conf", f"[Interface]\nPrivateKey={keys['server'][0]}\nListenPort=51820\n[Peer]\nPublicKey={keys['client'][1]}\nAllowedIPs=10.78.0.2/32,fd78:78::2/128\n")
-            for path in fixtures.iterdir():
-                path.chmod(0o600)
+            # Rootful runtimes create these as root, so tighten modes from inside a container.
+            ctr("run", "--rm", "--network", "none", "-v", f"{fixtures}:/fixtures:z", "--entrypoint", "chmod", SERVER_IMAGE, "-R", "go-rwx", "/fixtures")
 
             ctr("network", "create", "--internal", network)
             containers.append(client)
