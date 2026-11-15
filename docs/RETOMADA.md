@@ -1,6 +1,6 @@
 # Notas para retomar o desenvolvimento
 
-Atualizado em 13/11/2026.
+Atualizado em 15/11/2026.
 
 ## Projeto e conta
 
@@ -58,6 +58,16 @@ O README contém capturas reais da interface com dados sintéticos em `docs/scre
 - Workflow `release.yml`: execução manual gera artefatos; pushes na main e tags com versão igual ao Cargo.toml publicam prereleases após os quatro builds/checksums passarem. Na main, a tag main-<run>-<attempt>-<sha> aponta para o commit exato; execuções não se cancelam entre si. Linux tar.gz; Windows ZIP portátil; macOS .app em ZIP para Intel/ARM, assinatura ad hoc sem notarização. Inventário e textos de licenças acompanham os pacotes. App sob licença MIT (15/11/2026); o pacote inclui `LICENSE`.
 - Detalhes e comandos em [DESKTOP-RELEASES.md](DESKTOP-RELEASES.md). Não houve push de tag nem publicação observada nesta etapa.
 - Testes locais dos parsers e processos e checks cruzados do app Windows GNU/MSVC e macOS Intel/ARM passaram; não equivalem a execução nativa ou túnel real. CI adiciona perfil fictício no Windows e o remove em finally, sem ativar. A execução remota desse teste ainda precisa ser observada.
+
+## Estado em 15/11/2026 — release 0.3.0
+
+- Release estável `v0.3.0` publicada pela CI com `.deb`, `.rpm`, `.tar.gz`, `.msi`, `.dmg` (ARM/Intel) e ZIPs portáteis. Tags `v*` geram release estável (latest); cada push na `main` gera prerelease `main-*`.
+- CI verde nos três sistemas: Rust checks, Desktop releases (instala/remove cada instalador) e `Linux NetworkManager tunnel lab` (OpenVPN com certificado e WireGuard: tráfego IPv4/IPv6, DNS, rotas, desconexão e queda do servidor).
+- Corrigido: WireGuard importado não conecta mais sozinho (`autoconnect` desligado após import).
+- Túnel Windows na CI não é viável no runner gratuito: RRAS na mesma VM derruba o RasMan (detalhes em VALIDATION.md; branch `windows-tunnel-lab` preservada). macOS sem túnel testável sem Mac físico.
+- Custos: conta joaogabriel15 no plano gratuito para Actions, com orçamentos de US$ 0 e bloqueio em todos os produtos. Manter CI só em repo público e runners padrão.
+- Fortinet SSO da empresa: FortiClient instalado tem CLI bloqueada (licença EMS). Caminho proposto: `openfortivpn --saml-login`, aguardando decisão do proprietário. Nunca registrar dados da empresa no repo.
+- Próximos itens viáveis na CI: senha OpenVPN pela CLI (hoje `connect` não recebe senha), IKEv2 (strongSwan) e OpenConnect (ocserv) no laboratório NetworkManager.
 
 ## Próximo ponto técnico
 
