@@ -3306,7 +3306,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vpn-manager"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "async-channel",
  "gtk4",
@@ -3319,7 +3319,7 @@ dependencies = [
 
 [[package]]
 name = "vpn-manager-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "toml",
@@ -3328,7 +3328,7 @@ dependencies = [
 
 [[package]]
 name = "vpn-manager-native"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "eframe",
  "serde",
@@ -3338,7 +3338,7 @@ dependencies = [
 
 [[package]]
 name = "vpn-manager-networkmanager"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "flate2",
  "gio",
