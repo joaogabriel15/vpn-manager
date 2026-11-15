@@ -2,6 +2,8 @@ Versão preliminar desktop do VPN Manager.
 
 - Instaladores por sistema: `.deb` e `.rpm` no Linux, `.msi` no Windows e `.dmg` no macOS, além dos pacotes portáteis. Instalação e remoção são testadas na CI antes de publicar.
 - Licença MIT.
+- Importação de pacotes de empresas: `.zip`/`.tar.gz` (inclusive aninhados) e scripts instaladores com a configuração OpenVPN embutida. Os scripts são apenas lidos, nunca executados; certificados do pacote entram no perfil e o login é pedido pelo app.
+- WireGuard importado não conecta mais sozinho.
 
 - OpenVPN no Linux: salvar a senha no cofre por padrão, com opção Usar senha somente desta vez, e reutilizar automaticamente nos próximos logins; atalho para trocar/esquecer e retorno ao formulário quando a tentativa falha.
 - Linux: catálogo de protocolos/plugins, cadastro pelo editor nativo, login interativo opcional por nmcli --ask, importação PCF sem senhas e validação de hooks executáveis. A existência do plugin não homologa gateways.

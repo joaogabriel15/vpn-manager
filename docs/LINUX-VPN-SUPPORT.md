@@ -12,7 +12,7 @@ No menu **Recursos VPN disponíveis**, confira engine, biblioteca de configuraç
 
 | Família | Plugin / caminho | Cadastro e limites |
 | --- | --- | --- |
-| OpenVPN | `openvpn` | Formulário básico, arquivo detectado pelo conteúdo, editor nativo para certificados/opções e login do app ou agente do sistema |
+| OpenVPN | `openvpn` | Formulário básico, arquivo detectado pelo conteúdo, pacotes `.zip`/`.tar.gz` e scripts instaladores com a configuração embutida (lidos, nunca executados; arquivos referenciados viram blocos inline e `auth-user-pass <arquivo>` vira login interativo), editor nativo para certificados/opções e login do app ou agente do sistema |
 | WireGuard | Nativo do NetworkManager | Importação de configuração e editor nativo para peers/chaves; exportação e QR próprios ainda pendentes |
 | Cisco AnyConnect/ocserv, GlobalProtect, Pulse/Ivanti, Juniper, F5, Array, Fortinet SSL/PPP | `openconnect` | Selecione no editor nativo apenas os protocolos expostos pelo plugin/engine instalado; cada variante, gateway e autenticação precisa de teste próprio |
 | Fortinet SSL-VPN PPP | `fortisslvpn` / openfortivpn | Configure servidor, realm/grupo, CA e autenticação no editor nativo conforme as opções oferecidas. Não equivale a Fortinet IPsec, EMS ou ZTNA |

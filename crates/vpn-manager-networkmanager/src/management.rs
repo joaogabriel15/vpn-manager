@@ -171,6 +171,8 @@ pub(crate) async fn create(profile: &OpenVpnProfile) -> Result<String, BackendEr
 pub async fn detect_file(
     path: &Path,
 ) -> Result<vpn_manager_core::import::ImportFormat, BackendError> {
+    let prepared = prepare(path).await?;
+    let path = prepared.path();
     let text = read_configuration(path).await?;
     let format = detect_import(&text).map_err(|e| invalid(match e {
         vpn_manager_core::import::DetectionError::Unknown => "Formato não reconhecido. Selecione OpenVPN, WireGuard, Cisco PCF ou VPN Manager; para outros protocolos use o editor do Linux.",
@@ -180,8 +182,149 @@ pub async fn detect_file(
     Ok(format)
 }
 
+/// A selected file, or the OpenVPN configuration extracted from a vendor
+/// bundle (archive or installer script) into a private temporary file.
+enum Prepared<'a> {
+    Original(&'a Path),
+    // The directory is held only so it is deleted when the import finishes.
+    Extracted {
+        _dir: tempfile::TempDir,
+        path: std::path::PathBuf,
+    },
+}
+
+impl Prepared<'_> {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Original(path) => path,
+            Self::Extracted { path, .. } => path,
+        }
+    }
+}
+
+const MAX_BUNDLE: usize = 32 * 1024 * 1024;
+
+async fn prepare(path: &Path) -> Result<Prepared<'_>, BackendError> {
+    let bytes = read_bytes(path, MAX_BUNDLE).await?;
+    let archive = bytes.starts_with(b"PK\x03\x04")
+        || bytes.starts_with(&[0x1f, 0x8b])
+        || bytes.get(257..262) == Some(b"ustar");
+    if !archive && !bytes.starts_with(b"#!") {
+        return Ok(Prepared::Original(path));
+    }
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("vpn");
+    let mut files = Vec::new();
+    expand(name.to_owned(), bytes, 0, &mut files)?;
+    let config = vpn_manager_core::import::openvpn_from_bundle(&files).map_err(|e| invalid(match e {
+        vpn_manager_core::import::DetectionError::Unknown => "Nenhuma configuração OpenVPN foi encontrada no pacote. Scripts são apenas lidos, nunca executados.",
+        vpn_manager_core::import::DetectionError::Ambiguous => "O pacote contém mais de uma configuração VPN diferente. Extraia e importe o arquivo desejado.",
+    }))?;
+    let stem = name
+        .split('.')
+        .next()
+        .filter(|s| !s.is_empty() && !s.starts_with("install"))
+        .unwrap_or("vpn");
+    let dir = tempfile::Builder::new()
+        .prefix("vpn-manager-import-")
+        .tempdir()
+        .map_err(|_| invalid("Não foi possível preparar a importação."))?;
+    let target = dir.path().join(format!("{stem}.ovpn"));
+    {
+        use std::{io::Write, os::unix::fs::OpenOptionsExt};
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&target)
+            .and_then(|mut f| f.write_all(config.as_bytes()))
+            .map_err(|_| invalid("Não foi possível preparar a importação."))?;
+    }
+    Ok(Prepared::Extracted {
+        _dir: dir,
+        path: target,
+    })
+}
+
+/// In-memory expansion of zip/tar(.gz) bundles: nothing is written to disk, so
+/// entry paths cannot escape, and sizes are capped against decompression bombs.
+fn expand(
+    name: String,
+    bytes: Vec<u8>,
+    depth: u8,
+    files: &mut Vec<(String, Vec<u8>)>,
+) -> Result<(), BackendError> {
+    use std::io::Read;
+    const MAX_ENTRY: u64 = 4 * 1024 * 1024;
+    let too_big = || invalid("O pacote é grande demais ou tem arquivos demais para importar.");
+    let damaged = || invalid("Não foi possível ler o pacote compactado.");
+    let mut entries = Vec::new();
+    if depth < 3 && bytes.starts_with(b"PK\x03\x04") {
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| damaged())?;
+        for i in 0..zip.len() {
+            let entry = zip.by_index(i).map_err(|_| damaged())?;
+            if !entry.is_file() {
+                continue;
+            }
+            let entry_name = entry.name().map_err(|_| damaged())?.into_owned();
+            let mut data = Vec::new();
+            entry
+                .take(MAX_ENTRY + 1)
+                .read_to_end(&mut data)
+                .map_err(|_| damaged())?;
+            entries.push((entry_name, data));
+        }
+    } else if depth < 3
+        && (bytes.starts_with(&[0x1f, 0x8b]) || bytes.get(257..262) == Some(b"ustar"))
+    {
+        let reader: Box<dyn Read> = if bytes.starts_with(&[0x1f, 0x8b]) {
+            Box::new(
+                flate2::read::GzDecoder::new(std::io::Cursor::new(bytes)).take(MAX_BUNDLE as u64),
+            )
+        } else {
+            Box::new(std::io::Cursor::new(bytes))
+        };
+        let mut tar = tar::Archive::new(reader);
+        for entry in tar.entries().map_err(|_| damaged())? {
+            let entry = entry.map_err(|_| damaged())?;
+            if !entry.header().entry_type().is_file() {
+                continue;
+            }
+            let entry_name = entry
+                .path()
+                .map_err(|_| damaged())?
+                .to_string_lossy()
+                .into_owned();
+            let mut data = Vec::new();
+            entry
+                .take(MAX_ENTRY + 1)
+                .read_to_end(&mut data)
+                .map_err(|_| damaged())?;
+            entries.push((entry_name, data));
+        }
+    } else {
+        files.push((name, bytes));
+        return Ok(());
+    }
+    for (entry_name, data) in entries {
+        if data.len() as u64 > MAX_ENTRY
+            || files.len() > 256
+            || files.iter().map(|(_, d)| d.len()).sum::<usize>() + data.len() > MAX_BUNDLE
+        {
+            return Err(too_big());
+        }
+        expand(format!("{name}/{entry_name}"), data, depth + 1, files)?;
+    }
+    Ok(())
+}
+
 async fn read_configuration(path: &Path) -> Result<String, BackendError> {
-    const MAX: usize = 4 * 1024 * 1024;
+    let bytes = read_bytes(path, 4 * 1024 * 1024).await?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| invalid("Selecione uma configuração em texto UTF-8."))?;
+    Ok(text.into())
+}
+
+async fn read_bytes(path: &Path, max: usize) -> Result<Vec<u8>, BackendError> {
     let file = gio::File::for_path(path);
     let stream = file
         .read_future(gio::glib::Priority::DEFAULT)
@@ -191,7 +334,7 @@ async fn read_configuration(path: &Path) -> Result<String, BackendError> {
     loop {
         let chunk = stream
             .read_bytes_future(
-                (MAX + 1 - bytes.len()).min(65536),
+                (max + 1 - bytes.len()).min(65536),
                 gio::glib::Priority::DEFAULT,
             )
             .await
@@ -200,15 +343,14 @@ async fn read_configuration(path: &Path) -> Result<String, BackendError> {
             break;
         }
         bytes.extend_from_slice(&chunk);
-        if bytes.len() > MAX {
-            return Err(invalid(
-                "O arquivo excede o limite de 4 MiB para importação.",
-            ));
+        if bytes.len() > max {
+            return Err(invalid(format!(
+                "O arquivo excede o limite de {} MiB para importação.",
+                max / (1024 * 1024)
+            )));
         }
     }
-    let text = std::str::from_utf8(&bytes)
-        .map_err(|_| invalid("Selecione uma configuração em texto UTF-8."))?;
-    Ok(text.into())
+    Ok(bytes)
 }
 
 fn pcf_without_secrets(text: &str) -> Result<String, BackendError> {
@@ -247,6 +389,8 @@ fn pcf_without_secrets(text: &str) -> Result<String, BackendError> {
 }
 
 pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
+    let prepared = prepare(path).await?;
+    let path = prepared.path();
     let format = detect_file(path).await?;
     if format == vpn_manager_core::import::ImportFormat::ManagerProfile {
         let document =
@@ -355,6 +499,37 @@ pub(crate) async fn cancel(id: &str) -> Result<(), BackendError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn nested_vendor_bundle_yields_one_self_contained_openvpn_config() {
+        use std::io::Write;
+        let mut inner = tar::Builder::new(flate2::write::GzEncoder::new(
+            Vec::new(),
+            flate2::Compression::default(),
+        ));
+        let cert = b"-----BEGIN CERTIFICATE-----\nSYNTHETIC\n-----END CERTIFICATE-----\n";
+        let mut header = tar::Header::new_gnu();
+        header.set_size(cert.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        inner
+            .append_data(&mut header, "lab-ca.crt", &cert[..])
+            .unwrap();
+        let inner = inner.into_inner().unwrap().finish().unwrap();
+        let script = "#!/bin/bash\necho \"client\nremote vpn.example.invalid 1194 udp\nca lab-ca.crt\nauth-user-pass /opt/x/login.conf\" > /opt/x/vpn.conf\n";
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("pkg/install.sh", options).unwrap();
+        zip.write_all(script.as_bytes()).unwrap();
+        zip.start_file("pkg/certs.tar.gz", options).unwrap();
+        zip.write_all(&inner).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut files = Vec::new();
+        super::expand("bundle.zip".into(), bytes, 0, &mut files).unwrap();
+        let config = vpn_manager_core::import::openvpn_from_bundle(&files).unwrap();
+        assert!(config.contains("<ca>\n-----BEGIN CERTIFICATE-----\nSYNTHETIC"));
+        assert!(config.lines().any(|l| l == "auth-user-pass"));
+    }
+
     #[test]
     fn imported_uuid_ignores_localized_text() {
         let id = "0f5e7c1a-2b3d-4e5f-8a9b-0c1d2e3f4a5b";

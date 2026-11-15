@@ -258,3 +258,219 @@ mod additional_tests {
         );
     }
 }
+
+/// Directives whose argument names a file that OpenVPN can also take inline.
+const INLINE_FILES: [&str; 8] = [
+    "ca",
+    "cert",
+    "key",
+    "dh",
+    "tls-auth",
+    "tls-crypt",
+    "tls-crypt-v2",
+    "extra-certs",
+];
+
+/// OpenVPN client configuration found in a vendor bundle: a plain `.ovpn` or
+/// text embedded in an installer script, which is read and never executed.
+/// Files referenced by name are inlined from the bundle so the result is
+/// self-contained; `auth-user-pass <file>` becomes an interactive login.
+pub fn openvpn_from_bundle(files: &[(String, Vec<u8>)]) -> Result<String, DetectionError> {
+    let mut found: Vec<String> = Vec::new();
+    for (name, bytes) in files {
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        let script = text.starts_with("#!") || name.ends_with(".sh");
+        let blocks = if script {
+            embedded_blocks(text)
+        } else {
+            vec![text.to_owned()]
+        };
+        for block in blocks {
+            if detect_import(&block) == Ok(ImportFormat::OpenVpn) && !found.contains(&block) {
+                found.push(block);
+            }
+        }
+    }
+    // Installers often ship per-distro variants of one profile; if one variant
+    // contains every line of the others, it is the most complete choice.
+    let superset = found.iter().find(|candidate| {
+        let all = config_lines(candidate);
+        found
+            .iter()
+            .all(|other| config_lines(other).is_subset(&all))
+    });
+    match (found.as_slice(), superset) {
+        ([], _) => Err(DetectionError::Unknown),
+        (_, Some(config)) => Ok(self_contained(config, files)),
+        _ => Err(DetectionError::Ambiguous),
+    }
+}
+
+/// Double-quoted strings and heredoc bodies of a shell script.
+fn embedded_blocks(script: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut chars = script.chars();
+    while let Some(c) = chars.next() {
+        if c != '"' {
+            continue;
+        }
+        let mut block = String::new();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => break,
+                '\\' => match chars.next() {
+                    Some(next @ ('"' | '\\' | '$' | '`')) => block.push(next),
+                    Some(next) => {
+                        block.push('\\');
+                        block.push(next);
+                    }
+                    None => {}
+                },
+                _ => block.push(c),
+            }
+        }
+        if block.contains('\n') {
+            blocks.push(block);
+        }
+    }
+    let mut lines = script.lines();
+    while let Some(line) = lines.next() {
+        let Some((_, marker)) = line.split_once("<<") else {
+            continue;
+        };
+        let marker = marker
+            .trim_start_matches('-')
+            .trim()
+            .trim_matches(['\'', '"']);
+        if marker.is_empty() || marker.contains(char::is_whitespace) {
+            continue;
+        }
+        let body: Vec<&str> = lines.by_ref().take_while(|l| l.trim() != marker).collect();
+        blocks.push(body.join("\n"));
+    }
+    blocks
+}
+
+fn self_contained(config: &str, files: &[(String, Vec<u8>)]) -> String {
+    let inline_tags: Vec<&str> = config
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix('<')?.strip_suffix('>'))
+        .collect();
+    let has_key_direction = config
+        .lines()
+        .any(|l| l.trim_start().starts_with("key-direction"));
+    let mut out = Vec::new();
+    let mut inside = false;
+    for line in config.lines() {
+        let trimmed = line.trim();
+        if let Some(tag) = trimmed.strip_prefix('<').and_then(|s| s.strip_suffix('>')) {
+            inside = !tag.starts_with('/');
+        }
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        match words.as_slice() {
+            ["auth-user-pass", _, ..] if !inside => out.push("auth-user-pass".to_owned()),
+            [directive, file, rest @ ..] if !inside && INLINE_FILES.contains(directive) => {
+                if !has_key_direction
+                    && *directive == "tls-auth"
+                    && let Some(dir) = rest.first()
+                {
+                    out.push(format!("key-direction {dir}"));
+                }
+                if inline_tags.contains(directive) {
+                    continue;
+                }
+                let base = file
+                    .trim_matches(['\'', '"'])
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap_or(file);
+                match files
+                    .iter()
+                    .find(|(name, _)| name.rsplit('/').next() == Some(base))
+                    .and_then(|(_, bytes)| std::str::from_utf8(bytes).ok())
+                {
+                    Some(content) => out.push(format!(
+                        "<{directive}>\n{}\n</{directive}>",
+                        content.trim_end()
+                    )),
+                    None => out.push(line.to_owned()),
+                }
+            }
+            _ => out.push(line.to_owned()),
+        }
+    }
+    out.join("\n") + "\n"
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::*;
+
+    fn file(name: &str, text: &str) -> (String, Vec<u8>) {
+        (name.into(), text.as_bytes().to_vec())
+    }
+
+    #[test]
+    fn extracts_config_embedded_in_installer_script_without_running_it() {
+        let script = "#!/bin/bash\nusuario=$(zenity --entry)\necho \"$usuario\" > /opt/x/login.conf\necho \"dev tun\nclient\nremote vpn.example.invalid 1194 udp\nauth-user-pass /opt/x/login.conf\nca lab-ca.crt\ntls-auth lab-tls.key 1\" > /opt/x/vpn.conf\n";
+        let files = [
+            file("pkg/install-a.sh", script),
+            file("pkg/install-b.sh", script),
+            file(
+                "pkg/inner/lab-ca.crt",
+                "-----BEGIN CERTIFICATE-----\nSYNTHETIC\n-----END CERTIFICATE-----\n",
+            ),
+            file(
+                "pkg/inner/lab-tls.key",
+                "-----BEGIN OpenVPN Static key V1-----\nSYNTHETIC\n-----END OpenVPN Static key V1-----\n",
+            ),
+            ("pkg/demo.webm".into(), vec![0, 159, 146, 150]),
+        ];
+        let config = openvpn_from_bundle(&files).unwrap();
+        assert!(config.contains("remote vpn.example.invalid 1194 udp"));
+        assert!(config.lines().any(|l| l == "auth-user-pass"));
+        assert!(config.contains("<ca>\n-----BEGIN CERTIFICATE-----\nSYNTHETIC"));
+        assert!(config.contains("<tls-auth>\n-----BEGIN OpenVPN Static key V1-----"));
+        assert!(config.contains("key-direction 1"));
+        assert!(!config.contains("zenity") && !config.contains("login.conf"));
+        assert_eq!(detect_import(&config), Ok(ImportFormat::OpenVpn));
+    }
+
+    #[test]
+    fn inline_blocks_win_over_file_references_and_heredocs_are_read() {
+        let script = "#!/bin/sh\ncat > vpn.ovpn <<'EOF'\nclient\nremote vpn.example.invalid 443 tcp\nca missing.crt\n<ca>\nINLINE\n</ca>\nEOF\n";
+        let config = openvpn_from_bundle(&[file("setup.sh", script)]).unwrap();
+        assert!(!config.contains("missing.crt"));
+        assert!(config.contains("<ca>\nINLINE\n</ca>"));
+    }
+
+    #[test]
+    fn picks_the_most_complete_per_distro_variant() {
+        let base = "client\nremote vpn.example.invalid 1194 udp\n";
+        let newer = format!("{base}data-ciphers-fallback AES-128-CBC\n");
+        let config =
+            openvpn_from_bundle(&[file("old.ovpn", base), file("new.ovpn", &newer)]).unwrap();
+        assert!(config.contains("data-ciphers-fallback"));
+    }
+
+    #[test]
+    fn rejects_bundles_without_or_with_conflicting_configs() {
+        assert_eq!(
+            openvpn_from_bundle(&[file("readme.txt", "hello")]),
+            Err(DetectionError::Unknown)
+        );
+        assert_eq!(
+            openvpn_from_bundle(&[
+                file("a.ovpn", "client\nremote a.example.invalid 1194\n"),
+                file("b.ovpn", "client\nremote b.example.invalid 1194\n"),
+            ]),
+            Err(DetectionError::Ambiguous)
+        );
+    }
+}
+
+fn config_lines(config: &str) -> std::collections::HashSet<&str> {
+    config.lines().map(str::trim).collect()
+}

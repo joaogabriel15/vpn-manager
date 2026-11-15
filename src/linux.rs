@@ -1188,7 +1188,7 @@ fn render(ui: &Rc<Ui>) {
         } else {
             (
                 "Nenhuma VPN cadastrada",
-                "Importe um arquivo .ovpn ou .conf, ou crie uma nova VPN.",
+                "Importe um arquivo .ovpn, .conf ou o pacote .zip enviado pela empresa, ou crie uma nova VPN.",
             )
         };
         let title = label(title, "empty-title");
@@ -1785,7 +1785,9 @@ fn import_profile(ui: &Rc<Ui>) {
     let u = ui.clone();
     launch(ui, async move {
         let chooser = gtk::FileChooserNative::new(
-            Some("Importar VPN — OpenVPN, WireGuard, Cisco PCF ou VPN Manager"),
+            Some(
+                "Importar VPN — OpenVPN, WireGuard, Cisco PCF, VPN Manager ou pacote .zip/.tar.gz",
+            ),
             Some(&u.window),
             gtk::FileChooserAction::Open,
             Some("Importar"),

@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+flate2 = "1"
 gio = "0.21"
+tar = { version = "0.4", default-features = false }
 tempfile = "3"
 vpn-manager-core = { path = "../vpn-manager-core" }
+zip = { version = "9", default-features = false, features = ["deflate"] }
