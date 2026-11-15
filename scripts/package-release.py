@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Build desktop release archives from native binaries; never download engines."""
 import argparse
+import os
 import hashlib
 import json
 from pathlib import Path
 import plistlib
 import re
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -150,16 +152,149 @@ def build_archive(target, version, binaries, output, include_notices=True):
     return archive
 
 
+def ico(destination):
+    """Windows icon with PNG frames (supported since Vista); avoids an imaging dependency."""
+    frames = [(size, (ROOT / f"packaging/icons/vpn-manager-{size}.png").read_bytes()) for size in [16, 32, 48, 256]]
+    offset = 6 + 16 * len(frames)
+    header = struct.pack("<HHH", 0, 1, len(frames))
+    for size, data in frames:
+        header += struct.pack("<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(data), offset)
+        offset += len(data)
+    destination.write_bytes(header + b"".join(data for _, data in frames))
+
+
+def linux_root(root, binaries, staging):
+    copy_executable(binaries / "vpn-manager", root / "usr/bin/vpn-manager")
+    copy_executable(binaries / "vpn-manager-cli", root / "usr/bin/vpn-manager-cli")
+    applications = root / "usr/share/applications"
+    applications.mkdir(parents=True)
+    shutil.copy2(ROOT / "packaging/linux/br.com.pacheco.VpnManager.desktop", applications)
+    icons = root / "usr/share/icons/hicolor"
+    (icons / "scalable/apps").mkdir(parents=True)
+    shutil.copy2(ROOT / "packaging/vpn-manager.svg", icons / "scalable/apps/vpn-manager.svg")
+    for image in (ROOT / "packaging/icons").glob("vpn-manager-*.png"):
+        size = image.stem.rsplit("-", 1)[1]
+        (icons / f"{size}x{size}/apps").mkdir(parents=True)
+        shutil.copy2(image, icons / f"{size}x{size}/apps/vpn-manager.png")
+    docs = root / "usr/share/doc/vpn-manager"
+    docs.mkdir(parents=True)
+    for item in ["README.md", "LINUX-VPN-SUPPORT.md", "THIRD-PARTY.txt"]:
+        if (staging / item).exists():
+            shutil.copy2(staging / item, docs / item)
+    if (staging / "licenses").exists():
+        shutil.copytree(staging / "licenses", docs / "licenses")
+    shutil.copy2(ROOT / "LICENSE", docs / "copyright")
+    (root / "usr/share/licenses/vpn-manager").mkdir(parents=True)
+    shutil.copy2(ROOT / "LICENSE", root / "usr/share/licenses/vpn-manager/LICENSE")
+    for path in root.rglob("*"):
+        if path.is_dir() or path.parent.name != "bin":
+            path.chmod(0o755 if path.is_dir() else 0o644)
+
+
+def deb(version, root, archive):
+    (root / "DEBIAN").mkdir()
+    (root / "DEBIAN/control").write_text(f"""Package: vpn-manager
+Version: {version.replace("-", "~")}
+Architecture: amd64
+Maintainer: VPN Manager <41350439+joaogabriel15@users.noreply.github.com>
+Depends: libc6 (>= 2.39), libgtk-4-1 (>= 4.12), network-manager
+Recommends: network-manager-openvpn
+Section: net
+Priority: optional
+Homepage: https://github.com/joaogabriel15/vpn-manager
+Description: Simple VPN manager for NetworkManager
+ GTK interface, tray and CLI to list, import, edit and connect VPN profiles
+ managed by NetworkManager.
+""")
+    subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(root), str(archive)], check=True, stdout=subprocess.DEVNULL)
+
+
+def rpm(version, root, archive, temp):
+    top = temp / "rpmbuild"
+    subprocess.run([
+        "rpmbuild", "-bb", str(ROOT / "packaging/linux/vpn-manager.spec"),
+        "--define", f"_topdir {top}", "--define", f"pkg_version {version.split('-')[0]}",
+        "--define", f"staged_root {root}", "--define", "debug_package %{nil}",
+        "--define", "__os_install_post %{nil}",
+    ], check=True, stdout=subprocess.DEVNULL)
+    built = next((top / "RPMS").rglob("*.rpm"))
+    shutil.move(built, archive)
+
+
+def msi(version, staging, archive, temp):
+    wix = Path(os.environ.get("WIX", r"C:\Program Files (x86)\WiX Toolset v3.14")) / "bin"
+    ico(staging / "vpn-manager.ico")
+    shutil.copy2(ROOT / "LICENSE", staging / "LICENSE")
+    licenses = temp / "licenses.wxs"
+    subprocess.run([str(wix / "heat.exe"), "dir", str(staging / "licenses"), "-nologo", "-ag", "-sfrag", "-sreg",
+                    "-cg", "Licenses", "-dr", "INSTALLFOLDER", "-var", "var.LicenseSource", "-arch", "x64",
+                    "-o", str(licenses)], check=True)
+    objects = temp / "wixobj"
+    subprocess.run([str(wix / "candle.exe"), "-nologo", "-arch", "x64", f"-dVersion={version.split('-')[0]}",
+                    f"-dSource={staging}", f"-dLicenseSource={staging / 'licenses'}", "-out", str(objects) + os.sep,
+                    str(ROOT / "packaging/windows/vpn-manager.wxs"), str(licenses)], check=True)
+    subprocess.run([str(wix / "light.exe"), "-nologo", "-spdb", "-out", str(archive),
+                    *map(str, objects.glob("*.wixobj"))], check=True)
+
+
+def dmg(app, archive, temp):
+    folder = temp / "dmg"
+    folder.mkdir()
+    shutil.copytree(app, folder / app.name, symlinks=True)
+    (folder / "Applications").symlink_to("/Applications")
+    subprocess.run(["hdiutil", "create", "-volname", "VPN Manager", "-srcfolder", str(folder),
+                    "-format", "UDZO", "-ov", str(archive)], check=True, stdout=subprocess.DEVNULL)
+
+
+def installers(target, version, binaries, output):
+    """Native installers next to the portable archive; one per OS family."""
+    name = f"vpn-manager-{version}-{TARGETS[target]}"
+    with tempfile.TemporaryDirectory(prefix="vpn-manager-installer-") as temp:
+        temp = Path(temp)
+        staging = temp / "staging"
+        staging.mkdir()
+        (staging / "README.md").write_text((ROOT / "docs/DESKTOP-RELEASES.md").read_text(), encoding="utf-8")
+        notices(staging)
+        made = []
+        if "linux" in target:
+            shutil.copy2(ROOT / "docs/LINUX-VPN-SUPPORT.md", staging / "LINUX-VPN-SUPPORT.md")
+            for kind, builder in [("deb", deb), ("rpm", rpm)]:
+                root = temp / f"{kind}-root"
+                linux_root(root, binaries, staging)
+                archive = output / f"{name}.{kind}"
+                builder(version, root, archive) if kind == "deb" else builder(version, root, archive, temp)
+                made.append(archive)
+        elif "windows" in target:
+            copy_executable(binaries / "vpn-manager.exe", staging / "vpn-manager.exe")
+            copy_executable(binaries / "vpn-manager-native-cli.exe", staging / "vpn-manager-cli.exe")
+            made.append(output / f"{name}.msi")
+            msi(version, staging, made[-1], temp)
+        else:
+            # ditto keeps exec bits and the ad hoc signature of the packaged bundle.
+            subprocess.run(["ditto", "-x", "-k", str(output / f"{name}.zip"), str(temp / "app")], check=True)
+            made.append(output / f"{name}.dmg")
+            dmg(temp / "app" / name / "VPN Manager.app", made[-1], temp)
+    for archive in made:
+        with archive.open("rb") as file:
+            digest = hashlib.file_digest(file, "sha256").hexdigest()
+        archive.with_name(archive.name + ".sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")
+    return made
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=TARGETS, required=True)
     parser.add_argument("--version", default=version_from_manifest())
     parser.add_argument("--binary-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
+    parser.add_argument("--installers", action="store_true", help="also build .deb/.rpm, .msi or .dmg")
     args = parser.parse_args()
     if args.version != version_from_manifest():
         parser.error("Release tag/version must match Cargo.toml")
     print(build_archive(args.target, args.version, args.binary_dir, args.output))
+    if args.installers:
+        for archive in installers(args.target, args.version, args.binary_dir, args.output):
+            print(archive)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,10 @@ import tomllib
 
 def verify(folder, version):
     names = {f"vpn-manager-{version}-{target}{ext}" for target, ext in [
-        ("linux-x86_64", ".tar.gz"), ("windows-x86_64", ".zip"),
-        ("macos-arm64", ".zip"), ("macos-x86_64", ".zip"),
+        ("linux-x86_64", ".tar.gz"), ("linux-x86_64", ".deb"), ("linux-x86_64", ".rpm"),
+        ("windows-x86_64", ".zip"), ("windows-x86_64", ".msi"),
+        ("macos-arm64", ".zip"), ("macos-arm64", ".dmg"),
+        ("macos-x86_64", ".zip"), ("macos-x86_64", ".dmg"),
     ]}
     expected = names | {name + ".sha256" for name in names}
     if {path.name for path in folder.iterdir()} != expected:

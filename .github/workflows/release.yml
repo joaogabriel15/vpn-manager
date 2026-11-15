@@ -51,7 +51,7 @@ jobs:
               raise SystemExit('Tag must match Cargo.toml: v' + version)
       - name: Linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev python3-gi dbus-daemon dbus-x11 xvfb network-manager-openvpn
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev python3-gi dbus-daemon dbus-x11 xvfb network-manager-openvpn rpm
       - run: cargo fmt --all -- --check
       - run: python tests/release-packaging.py
       - name: Linux checks and build
@@ -92,7 +92,37 @@ jobs:
           target/${{ matrix.target }}/release/vpn-manager-native-cli --help
           target/${{ matrix.target }}/release/vpn-manager-native-cli list
       - name: Package
-        run: python scripts/package-release.py --target ${{ matrix.target }} --binary-dir target/${{ matrix.target }}/release
+        run: python scripts/package-release.py --installers --target ${{ matrix.target }} --binary-dir target/${{ matrix.target }}/release
+      - name: Installer install/remove smoke (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y ./dist/*.deb
+          /usr/bin/vpn-manager-cli --version
+          test -f /usr/share/applications/br.com.pacheco.VpnManager.desktop
+          sudo apt-get remove -y vpn-manager
+          test ! -e /usr/bin/vpn-manager
+          rpm -qp --requires dist/*.rpm | grep -q NetworkManager
+      - name: Installer install/remove smoke (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem dist/*.msi).FullName
+          $p = Start-Process msiexec -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'msi-install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content msi-install.log -Tail 40; throw "MSI install failed: $($p.ExitCode)" }
+          & "$env:ProgramFiles\VPN Manager\vpn-manager-cli.exe" --version
+          if (-not (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\VPN Manager.lnk")) { throw 'Start menu shortcut missing' }
+          $p = Start-Process msiexec -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "MSI uninstall failed: $($p.ExitCode)" }
+          if (Test-Path "$env:ProgramFiles\VPN Manager\vpn-manager.exe") { throw 'Files left after uninstall' }
+      - name: Installer mount smoke (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mount=$(mktemp -d)
+          hdiutil attach dist/*.dmg -nobrowse -readonly -mountpoint "$mount"
+          codesign --verify --deep --strict "$mount/VPN Manager.app"
+          "$mount/VPN Manager.app/Contents/MacOS/vpn-manager-cli" --version
+          test -L "$mount/Applications"
+          hdiutil detach "$mount"
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.target }}
@@ -124,10 +154,10 @@ jobs:
         run: |
           if [[ "$RELEASE_REF" == refs/tags/v* ]]; then
             release_tag="$RELEASE_REF_NAME"
-            tag_options=(--verify-tag)
+            tag_options=(--verify-tag --latest)
           else
             release_tag="main-${RELEASE_RUN}-${RELEASE_ATTEMPT}-${RELEASE_COMMIT:0:7}"
-            tag_options=(--target "$RELEASE_COMMIT")
+            tag_options=(--target "$RELEASE_COMMIT" --prerelease)
           fi
-          gh release create "$release_tag" dist/* "${tag_options[@]}" --draft --prerelease --title "VPN Manager $release_tag" --notes-file docs/RELEASE-NOTES.md
+          gh release create "$release_tag" dist/* "${tag_options[@]}" --draft --title "VPN Manager $release_tag" --notes-file docs/RELEASE-NOTES.md
           gh release edit "$release_tag" --draft=false

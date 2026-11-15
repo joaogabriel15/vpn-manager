@@ -31,9 +31,9 @@ class ReleaseTests(unittest.TestCase):
             binaries.mkdir()
             for name in ['vpn-manager', 'vpn-manager-cli']:
                 (binaries / name).write_bytes(b'synthetic executable')
-            archive = package.build_archive('x86_64-unknown-linux-gnu', '0.2.0', binaries, base / 'dist', False)
+            archive = package.build_archive('x86_64-unknown-linux-gnu', '0.3.0', binaries, base / 'dist', False)
             with tarfile.open(archive) as file:
-                root = 'vpn-manager-0.2.0-linux-x86_64'
+                root = 'vpn-manager-0.3.0-linux-x86_64'
                 self.assertEqual(file.getmember(root + '/bin/vpn-manager').mode & 0o777, 0o755)
                 self.assertEqual(file.getmember(root + '/install.sh').mode & 0o777, 0o755)
                 self.assertIn(root + '/README.md', file.getnames())
@@ -43,7 +43,7 @@ class ReleaseTests(unittest.TestCase):
                 checksum = hashlib.file_digest(file, 'sha256').hexdigest()
             self.assertEqual(archive.with_name(archive.name + '.sha256').read_text(), f'{checksum}  {archive.name}\n')
             with self.assertRaises(FileExistsError):
-                package.build_archive('x86_64-unknown-linux-gnu', '0.2.0', binaries, base / 'dist', False)
+                package.build_archive('x86_64-unknown-linux-gnu', '0.3.0', binaries, base / 'dist', False)
 
     def test_windows_layout_and_missing_binary_rejection(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -52,28 +52,28 @@ class ReleaseTests(unittest.TestCase):
             binaries.mkdir()
             (binaries / 'vpn-manager.exe').write_bytes(b'synthetic exe')
             with self.assertRaises(FileNotFoundError):
-                package.build_archive('x86_64-pc-windows-msvc', '0.2.0', binaries, base / 'dist', False)
+                package.build_archive('x86_64-pc-windows-msvc', '0.3.0', binaries, base / 'dist', False)
             (binaries / 'vpn-manager-native-cli.exe').write_bytes(b'synthetic cli')
             os.utime(binaries / 'vpn-manager.exe', (0, 0))  # crate files can date from 1970
-            archive = package.build_archive('x86_64-pc-windows-msvc', '0.2.0', binaries, base / 'dist', False)
+            archive = package.build_archive('x86_64-pc-windows-msvc', '0.3.0', binaries, base / 'dist', False)
             with zipfile.ZipFile(archive) as file:
-                self.assertIn('vpn-manager-0.2.0-windows-x86_64/vpn-manager-cli.exe', file.namelist())
+                self.assertIn('vpn-manager-0.3.0-windows-x86_64/vpn-manager-cli.exe', file.namelist())
 
     def test_publish_requires_all_targets_and_valid_checksums(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
-            for target, ext in [('linux-x86_64', '.tar.gz'), ('windows-x86_64', '.zip'), ('macos-arm64', '.zip'), ('macos-x86_64', '.zip')]:
-                name = f'vpn-manager-0.2.0-{target}{ext}'
+            for target, ext in [('linux-x86_64', '.tar.gz'), ('linux-x86_64', '.deb'), ('linux-x86_64', '.rpm'), ('windows-x86_64', '.zip'), ('windows-x86_64', '.msi'), ('macos-arm64', '.zip'), ('macos-arm64', '.dmg'), ('macos-x86_64', '.zip'), ('macos-x86_64', '.dmg')]:
+                name = f'vpn-manager-0.3.0-{target}{ext}'
                 (folder / name).write_bytes(b'test artifact')
                 digest = hashlib.sha256(b'test artifact').hexdigest()
                 (folder / (name + '.sha256')).write_text(f'{digest}  {name}\n')
-            verify(folder, '0.2.0')
+            verify(folder, '0.3.0')
             (folder / name).write_bytes(b'corrupted artifact')
             with self.assertRaises(ValueError):
-                verify(folder, '0.2.0')
+                verify(folder, '0.3.0')
             (folder / name).unlink()
             with self.assertRaises(ValueError):
-                verify(folder, '0.2.0')
+                verify(folder, '0.3.0')
 
     def test_rejects_version_path_traversal(self):
         with tempfile.TemporaryDirectory() as temp:

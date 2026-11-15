@@ -2,8 +2,10 @@
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 command -v nmcli >/dev/null || { echo 'Instale NetworkManager primeiro.' >&2; exit 1; }
-if [[ ! -x target/release/vpn-manager ]]; then
-  cargo build --release --locked
+if command -v cargo >/dev/null; then
+  cargo build --release --locked --workspace
+elif [[ ! -x target/release/vpn-manager ]]; then
+  echo 'Instale Rust (cargo) para compilar o VPN Manager.' >&2; exit 1
 fi
 install -Dm755 target/release/vpn-manager "$HOME/.local/bin/vpn-manager"
 if [[ -x target/release/vpn-manager-cli ]]; then

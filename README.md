@@ -4,23 +4,45 @@ Gerenciador de VPN em Rust, com foco em **Linux, Windows e macOS**. Interface em
 
 Linux usa GTK 4 e NetworkManager, sem executar a interface como root. Windows e macOS têm implementação inicial com interface e CLI para VPNs cadastradas no sistema.
 
-[Roadmap](ROADMAP.md) · [Releases desktop](docs/DESKTOP-RELEASES.md) · [Instalação Linux](#instalação) · [Validação](docs/VALIDATION.md) · [Backlog técnico](BACKLOG.md) · [Cobertura VPN no Linux](docs/LINUX-VPN-SUPPORT.md)
+[Baixar e instalar](#baixar-e-instalar) · [Roadmap](ROADMAP.md) · [Releases desktop](docs/DESKTOP-RELEASES.md) · [Compilar](#compilar-e-instalar-pelo-código-fonte) · [Validação](docs/VALIDATION.md) · [Backlog técnico](BACKLOG.md) · [Cobertura VPN no Linux](docs/LINUX-VPN-SUPPORT.md)
 
 ## Estado do projeto
 
 | Plataforma | Situação |
 | --- | --- |
 | Linux | Aplicativo e CLI implementados; homologação completa em andamento |
-| Windows x64 | Interface/CLI iniciais para perfis VPN nativos do usuário; pacote ZIP portátil; túneis reais ainda não homologados |
-| macOS 13+ Intel/Apple Silicon | Interface/CLI iniciais para perfis expostos em `scutil --nc`; pacote `.app` em ZIP; túneis reais ainda não homologados |
+| Windows x64 | Interface/CLI iniciais para perfis VPN nativos do usuário; instalador `.msi` e ZIP portátil |
+| macOS 13+ Intel/Apple Silicon | Interface/CLI iniciais para perfis expostos em `scutil --nc`; `.dmg` e `.app` em ZIP; túneis reais ainda não homologados |
 
 Android e iOS/iPadOS ficam para uma fase futura. Os checks do núcleo Rust fora do Linux não equivalem a aplicativos prontos nessas plataformas.
 
+## Baixar e instalar
+
+Baixe o arquivo do seu sistema na [última release](https://github.com/joaogabriel15/vpn-manager/releases/latest). Builds de teste de cada commit ficam nas [prereleases](https://github.com/joaogabriel15/vpn-manager/releases).
+
+| Sistema | Arquivo | Como instalar |
+| --- | --- | --- |
+| Ubuntu 24.04+ / Debian 13+ | `…-linux-x86_64.deb` | Dê dois cliques ou rode `sudo apt install ./vpn-manager-*.deb` |
+| Fedora 40+ / openSUSE | `…-linux-x86_64.rpm` | Dê dois cliques ou rode `sudo dnf install ./vpn-manager-*.rpm` |
+| Arch, CachyOS e outras | `…-linux-x86_64.tar.gz` | Extraia e rode `./install.sh` (sem sudo, só para o seu usuário) |
+| Windows 10/11 | `…-windows-x86_64.msi` | Dê dois cliques e siga o instalador; o app aparece no menu Iniciar |
+| macOS Apple Silicon (M1+) | `…-macos-arm64.dmg` | Abra o `.dmg` e arraste **VPN Manager** para **Aplicativos** |
+| macOS Intel | `…-macos-x86_64.dmg` | Igual ao anterior |
+
+Avisos na primeira abertura, porque o app ainda não tem assinatura paga:
+
+- **Windows:** se aparecer "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.
+- **macOS:** se o sistema disser que não pode verificar o desenvolvedor, abra **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim**. Outra opção é clicar com o botão direito no app e escolher **Abrir**.
+
+No Linux, instale também o plugin do NetworkManager do seu protocolo (por exemplo `network-manager-openvpn` ou `NetworkManager-openvpn`). No Windows e no macOS, cadastre a VPN nas configurações de rede do sistema; o app lista e conecta essas VPNs.
+
+Para remover: no Linux, `sudo apt remove vpn-manager` ou `sudo dnf remove vpn-manager`; no Windows, em **Configurações → Aplicativos**; no macOS, apague o app de **Aplicativos**. Seus perfis VPN são mantidos.
+
 ## Releases e Windows/macOS
 
-O workflow [Desktop releases](.github/workflows/release.yml) gera os quatro pacotes e checksums SHA-256. Cada push na `main` publica uma prerelease com tag única e vinculada ao commit após todos os builds passarem. Tags `v<versão do Cargo.toml>` também publicam; execução manual gera somente artefatos. Consulte [instalação, limites e publicação](docs/DESKTOP-RELEASES.md).
+O workflow [Desktop releases](.github/workflows/release.yml) gera, para cada sistema, o pacote portátil, o instalador nativo (`.deb`, `.rpm`, `.msi` ou `.dmg`) e checksums SHA-256, e testa instalação e remoção de cada instalador. Cada push na `main` publica uma prerelease com tag única vinculada ao commit; tags `v<versão do Cargo.toml>` publicam a release estável. Execução manual gera somente artefatos. Consulte [instalação, limites e publicação](docs/DESKTOP-RELEASES.md).
 
-Windows/macOS permitem buscar e listar as VPNs do sistema, solicitar conexão/desligamento e abrir as configurações nativas. A atualização do estado é manual. Credenciais/certificados são configurados no sistema; engines OpenVPN/WireGuard, importação, bandeja, eventos e agente MFA nessas plataformas permanecem pendentes. Windows sem assinatura Authenticode; macOS com assinatura ad hoc, sem notarização. O workflow ainda precisa de execução remota observada; compilação local cruzada não homologa conectividade.
+Windows/macOS permitem buscar e listar as VPNs do sistema, solicitar conexão/desligamento e abrir as configurações nativas. A atualização do estado é manual. Credenciais/certificados são configurados no sistema; engines OpenVPN/WireGuard, importação, bandeja, eventos e agente MFA nessas plataformas permanecem pendentes. Windows sem assinatura Authenticode; macOS com assinatura ad hoc, sem notarização. Instalar e abrir o pacote não homologa conectividade.
 
 ## Interface
 
@@ -73,7 +95,7 @@ O [roadmap do projeto](ROADMAP.md) separa o que já existe das implementações 
 
 O [backlog técnico](BACKLOG.md) mantém as dependências e os critérios de aceite. O [inventário de compatibilidade](docs/VPN-COMPATIBILITY.md) e o [plano de plataformas](docs/PLATFORMS.md) descrevem a expansão; planejamento não representa suporte já entregue.
 
-## Instalação
+## Compilar e instalar pelo código-fonte
 
 Requisitos: Rust, GTK >= 4.12, NetworkManager/nmcli e o plugin de cada protocolo. KDE Plasma já oferece suporte à bandeja; GNOME pode exigir uma extensão AppIndicator. No CachyOS, os pacotes relevantes são `gtk4`, `networkmanager` e `networkmanager-openvpn`. O editor avançado usa `plasma-nm` ou `nm-connection-editor`.
 
@@ -85,7 +107,7 @@ cargo build --release --locked
 
 O instalador é por usuário, sem sudo, e cria entradas no menu e na área de trabalho. O arquivo `br.com.pacheco.VpnManager.desktop` corresponde ao identificador da janela no Wayland. No KDE, o instalador também atualiza o atalho antigo já fixado na barra, preservando os outros atalhos e sua ordem. Marque **Iniciar com o Linux** no menu do app para ativar o autostart. `vpn-manager --background` abre diretamente na bandeja. Se a bandeja não estiver disponível, a janela aparece.
 
-Para atualizar, recompile e execute o instalador novamente. O script reutiliza o binário já compilado. Os perfis são mantidos pelo NetworkManager e não são apagados ao remover o app.
+Para atualizar, execute o instalador novamente; ele recompila o que mudou antes de instalar. Os perfis são mantidos pelo NetworkManager e não são apagados ao remover o app.
 
 ## Uso
 

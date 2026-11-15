@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VPN Manager
+Comment=Gerencie suas VPNs com facilidade
+Exec=vpn-manager
+Icon=vpn-manager
+Terminal=false
+Categories=Network;
+StartupNotify=true
+StartupWMClass=br.com.pacheco.VpnManager

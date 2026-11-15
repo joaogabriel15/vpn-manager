@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Built by scripts/package-release.py with WiX 3 (candle/light). -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="VPN Manager" Language="1046" Codepage="1252" Version="$(var.Version)"
+           Manufacturer="VPN Manager" UpgradeCode="6F0C4E57-9A55-4B0F-8F6B-3B1B2E7D5A10">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+    <MajorUpgrade DowngradeErrorMessage="Uma versão mais nova do VPN Manager já está instalada." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="AppIcon" SourceFile="$(var.Source)\vpn-manager.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="VPN Manager">
+          <Component Id="App" Guid="*" Win64="yes">
+            <File Id="AppExe" Source="$(var.Source)\vpn-manager.exe" KeyPath="yes" />
+            <File Id="CliExe" Source="$(var.Source)\vpn-manager-cli.exe" />
+            <File Id="License" Source="$(var.Source)\LICENSE" Name="LICENSE.txt" />
+            <File Id="Readme" Source="$(var.Source)\README.md" />
+            <File Id="ThirdParty" Source="$(var.Source)\THIRD-PARTY.txt" />
+          </Component>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Component Id="StartMenu" Guid="7A3D1C55-2E4B-4F3A-9C1E-5B6A7D8E9F01" Win64="yes">
+          <Shortcut Id="AppShortcut" Name="VPN Manager" Target="[INSTALLFOLDER]vpn-manager.exe"
+                    WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
+          <RegistryValue Root="HKMU" Key="Software\VPN Manager" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </Directory>
+    <Feature Id="Main" Title="VPN Manager" Level="1">
+      <ComponentRef Id="App" />
+      <ComponentRef Id="StartMenu" />
+      <ComponentGroupRef Id="Licenses" />
+    </Feature>
+  </Product>
+</Wix>
