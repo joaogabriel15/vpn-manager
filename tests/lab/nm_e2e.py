@@ -143,7 +143,10 @@ def main():
                 cli("import", f"/fixtures/{file}")
                 profile_id, label = profile(name)
                 if label != "Desconectada":
-                    raise RuntimeError(f"{protocol}: imported profile reported {label!r}")
+                    # NetworkManager imports WireGuard with autoconnect=yes, so it may start at once.
+                    print(f"{protocol}: profile active right after import ({label})", flush=True)
+                    cli("disconnect", profile_id)
+                    wait(f"{protocol} disconnected after import", lambda: profile(name)[1] == "Desconectada")
                 baseline = network_state()
 
                 def connected_and_carrying():
