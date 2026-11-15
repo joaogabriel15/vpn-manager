@@ -31,6 +31,32 @@ Baixe o arquivo do seu sistema na **[página de downloads](https://github.com/jo
 
 Depois de instalar, procure **VPN Manager** no menu de aplicativos.
 
+### Instalar pelo terminal, com atualizações automáticas
+
+Assim o VPN Manager é atualizado junto com o resto do sistema.
+
+**Ubuntu, Debian e Mint:**
+
+```sh
+curl -fsSL https://joaogabriel15.github.io/vpn-manager/vpn-manager.asc | sudo gpg --dearmor -o /usr/share/keyrings/vpn-manager.gpg
+echo "deb [signed-by=/usr/share/keyrings/vpn-manager.gpg] https://joaogabriel15.github.io/vpn-manager/apt stable main" | sudo tee /etc/apt/sources.list.d/vpn-manager.list
+sudo apt update && sudo apt install vpn-manager
+```
+
+**Fedora:**
+
+```sh
+sudo curl -fsSL -o /etc/yum.repos.d/vpn-manager.repo https://joaogabriel15.github.io/vpn-manager/vpn-manager.repo
+sudo dnf install vpn-manager
+```
+
+**openSUSE:**
+
+```sh
+sudo zypper addrepo https://joaogabriel15.github.io/vpn-manager/vpn-manager.repo
+sudo zypper install vpn-manager
+```
+
 **Avisos na primeira abertura.** O app ainda não tem assinatura digital paga, então o sistema pode desconfiar dele:
 
 - **Windows:** em "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.

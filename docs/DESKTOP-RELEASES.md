@@ -34,3 +34,8 @@ Para compilar localmente Windows/macOS: `cargo build --release --locked -p vpn-m
 A existência de um pacote não homologa conectividade, DNS, IPv6, suspensão ou reconexão. A matriz de QA continua necessária em cada sistema.
 
 Referências de integração: [Get-VpnConnection](https://learn.microsoft.com/en-us/powershell/module/vpnclient/get-vpnconnection), [rasdial](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/ff859533(v=ws.11)) e [implementação scutil da Apple](https://github.com/apple-oss-distributions/configd/blob/main/scutil.tproj/nc.c). A interface Windows/macOS usa [eframe/egui](https://github.com/emilk/egui).
+
+## Repositórios APT e DNF
+
+O workflow **Package repositories** roda depois de cada release estável (tag `v*`) e também manualmente. Ele baixa o `.deb` e o `.rpm` da última release, confere os checksums, assina o `Release`/`InRelease` do APT, os pacotes RPM e o `repomd.xml` com a chave `D3EF 5AFE 4AFE B7F8 DAF3 D5DC C0F5 7413 B694 E98A` (secret `REPO_SIGNING_KEY`; pública em `packaging/repo/vpn-manager.asc`) e publica em https://joaogabriel15.github.io/vpn-manager/. Em seguida instala o pacote pelos comandos documentados em Ubuntu 24.04, Debian 13 e Fedora 41 limpos. O repositório contém só a versão estável mais recente; prereleases da `main` não entram.
+
