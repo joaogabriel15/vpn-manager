@@ -1,0 +1,8 @@
+# Disposable NetworkManager client: own system D-Bus, sees only this container's network.
+FROM docker.io/library/ubuntu:24.04
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      network-manager network-manager-openvpn openvpn dbus iproute2 iputils-ping libglib2.0-0t64 \
+    && rm -rf /var/lib/apt/lists/* /usr/lib/NetworkManager/conf.d/* /etc/NetworkManager/conf.d/*
+COPY NetworkManager.conf /etc/NetworkManager/NetworkManager.conf
+COPY client.sh /usr/local/bin/vpn-lab-nm
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/vpn-lab-nm"]

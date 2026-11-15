@@ -1,0 +1,20 @@
+name: Linux NetworkManager tunnel lab
+on:
+  push:
+    branches: [linux-nm-lab]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  networkmanager:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev
+      - run: cargo build --locked -p vpn-manager-networkmanager --bin vpn-manager-cli
+      # NetworkManager uses kernel WireGuard; containers cannot load modules themselves.
+      - run: sudo modprobe wireguard
+      - name: App CLI to NetworkManager to OpenVPN/WireGuard (containers only)
+        run: python3 tests/lab/nm_e2e.py --runtime docker --cli target/debug/vpn-manager-cli

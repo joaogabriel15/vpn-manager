@@ -59,13 +59,28 @@ Esses testes validam os cenários das engines. Não comprovam o fluxo completo G
 
 Reproduzir: `python3 tests/lab/run.py`. Requer Podman ou Docker, `/dev/net/tun` e permissão para `NET_ADMIN`/`NET_RAW` dentro dos contêineres. O build baixa Debian e pacotes; as versões podem receber atualizações. As chaves não entram na imagem nem são mantidas no repositório. O workflow manual `Isolated VPN engines` executa o mesmo laboratório.
 
+## App → NetworkManager → gateway em contêineres — 15/11/2026
+
+`tests/lab/nm_e2e.py` (workflow `Linux NetworkManager tunnel lab`, runner ubuntu-24.04) executa NetworkManager 1.46 num contêiner Ubuntu 24.04 com D-Bus de sistema próprio e rede isolada; o NetworkManager e as rotas do host não são tocados. Servidores OpenVPN e WireGuard rodam em contêineres separados numa rede interna, com certificados, chaves e nomes sintéticos gerados por execução. Toda operação passa pela `vpn-manager-cli`.
+
+Resultado da execução 43735767683: **passou** para OpenVPN (certificado, sem senha) e WireGuard:
+
+- importação pela CLI, conexão, estado `Conectada` lido pela CLI;
+- tráfego IPv4 e IPv6 pelo túnel, rotas da sub-rede da VPN, DNS e domínio de busca enviados pela VPN aplicados em `/etc/resolv.conf` e resolução de nome pelo túnel;
+- desconexão pela CLI restaura exatamente as rotas IPv4/IPv6 e o `resolv.conf` anteriores;
+- queda do servidor: OpenVPN (`ping-exit`) sai de `Conectada` e o NetworkManager restaura rotas e DNS sozinho. WireGuard não tem sinal de vida: o tráfego para, o perfil continua `Conectada` e a restauração acontece ao desconectar.
+
+Achado: o NetworkManager importa WireGuard com `autoconnect=yes`, então o perfil conecta logo após `import`. O laboratório registra e desconecta antes de medir; o app ainda não altera esse comportamento.
+
+Limites: sem senha/MFA, cofre, agente de segredos, suspensão ou troca de rede; o laboratório não usa gateway comercial. Reproduzir localmente: `python3 tests/lab/nm_e2e.py --runtime podman --cli <vpn-manager-cli compilada para Ubuntu 24.04>`; WireGuard exige o módulo `wireguard` carregado no host.
+
 ## Consumo observado
 
 `python3 tests/measure-idle.py`: janela GTK em repouso por 10 segundos após o smoke test, sem engine de túnel no processo. Resultado: **0,07 s de CPU**, **0,7% de um núcleo**, **75.880 KiB de RSS**. É uma amostra local, sem orçamento de regressão estabelecido; não mede bateria nem os clientes VPN externos.
 
 ## Pendências para ampliar a homologação
 
-- Linux: túneis via NetworkManager em laboratório, cofre real, senha/MFA, agente próprio, reconexão, cancelamento sob autenticação e restauração de rede. IKEv2 ainda não foi adicionado ao laboratório.
+- Linux: cofre real, senha/MFA, agente próprio, reconexão, cancelamento sob autenticação e restauração de rede. IKEv2 ainda não foi adicionado ao laboratório.
 - Windows/macOS: validar interface e adaptadores iniciais em máquinas nativas; implementar engines próprias, serviços/extensões, cofre, eventos, instaladores assinados e homologação de túneis.
 - Android/iOS: adiados por decisão do proprietário. Os checks anteriores são histórico técnico, não requisito ou promessa da entrega desktop.
 - Fortinet e outros fabricantes: gateway autorizado, versão, modo e autenticação definidos; testes separados para SSL-VPN, IPsec, SAML e postura de endpoint.
