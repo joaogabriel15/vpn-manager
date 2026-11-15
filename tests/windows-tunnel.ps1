@@ -22,15 +22,38 @@ try {
     Install-RemoteAccess -VpnType Vpn -IPAddressRange '10.77.0.10', '10.77.0.50'
     net user $user $password /add /passwordchg:no | Out-Null
     netsh ras set user name=$user dialin=permit | Out-Null
-    $server = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike '169.254.*' } | Select-Object -First 1).IPAddress
+    Get-RemoteAccess | Format-List VpnStatus, VpnS2SStatus
+    Write-Host "RemoteAccess service: $((Get-Service RemoteAccess).Status)"
+    $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1
+    $server = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.ifIndex | Select-Object -First 1).IPAddress
     Write-Host "Server address: $server"
 
     Step "Create $TunnelType client profile with stored credentials"
     Add-VpnConnection -Name $name -ServerAddress $server -TunnelType $TunnelType -AuthenticationMethod MSChapv2 -EncryptionLevel Required -SplitTunneling -RememberCredential -Force
-    Install-PackageProvider NuGet -Force -Scope CurrentUser | Out-Null
-    Install-Module VPNCredentialsHelper -Force -Scope CurrentUser
-    Import-Module VPNCredentialsHelper
-    Set-VpnConnectionUsernamePassword -connectionname $name -username $user -password $password -domain '' | Out-Null
+    # Same call Windows makes for "remember credentials"; rasdial reuses them when no user is given.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class RasLab {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct RASCREDENTIALS {
+        public int dwSize; public int dwMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string szUserName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string szPassword;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 16)] public string szDomain;
+    }
+    [DllImport("rasapi32.dll", CharSet = CharSet.Unicode)]
+    static extern int RasSetCredentials(string phonebook, string entry, ref RASCREDENTIALS credentials, bool clear);
+    public static int Save(string phonebook, string entry, string user, string password) {
+        var c = new RASCREDENTIALS { dwMask = 7, szUserName = user, szPassword = password, szDomain = "" };
+        c.dwSize = Marshal.SizeOf(c);
+        return RasSetCredentials(phonebook, entry, ref c, false);
+    }
+}
+'@
+    $phonebook = Join-Path $env:APPDATA 'Microsoft\Network\Connections\Pbk\rasphone.pbk'
+    $status = [RasLab]::Save($phonebook, $name, $user, $password)
+    if ($status -ne 0) { throw "RasSetCredentials failed: $status" }
     $script:id = ([guid](Get-VpnConnection -Name $name).Guid).ToString()
 
     Step 'Connect through the app CLI'
