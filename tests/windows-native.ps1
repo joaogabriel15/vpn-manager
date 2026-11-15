@@ -11,6 +11,8 @@ try {
     if ($found.Count -ne 1) { throw 'Synthetic VPN was not found by stable ID and name' }
     & $Cli connect '00000000-0000-0000-0000-000000000000' 2>$null
     if ($LASTEXITCODE -eq 0) { throw 'Unknown profile was accepted' }
+    # The expected failure must not become the step's exit code.
+    $global:LASTEXITCODE = 0
     # No connection, credential lookup or tunnel activation is performed.
 } finally {
     if (Get-VpnConnection -Name $name -ErrorAction SilentlyContinue) {
