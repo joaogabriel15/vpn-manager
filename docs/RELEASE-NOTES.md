@@ -4,7 +4,7 @@ Versão preliminar desktop do VPN Manager.
 - Licença MIT.
 - Importação de pacotes de empresas: `.zip`/`.tar.gz` (inclusive aninhados) e scripts instaladores com a configuração OpenVPN embutida. Os scripts são apenas lidos, nunca executados; certificados do pacote entram no perfil e o login é pedido pelo app.
 - WireGuard importado não conecta mais sozinho.
-- Linux: **Importar do FortiClient** encontra as conexões SSL-VPN do FortiClient e conecta as que usam SSO/SAML pelo `openfortivpn`, com login no navegador. Requer o pacote `openfortivpn`. CLI: `vpn-manager-cli discover`.
+- Linux: ao abrir, o app importa automaticamente as conexões SSO do FortiClient; **Importar do FortiClient** refaz a busca. Ele encontra as conexões SSL-VPN do FortiClient e conecta as que usam SSO/SAML pelo `openfortivpn`, com login no navegador. Requer o pacote `openfortivpn`. CLI: `vpn-manager-cli discover`.
 
 - OpenVPN no Linux: salvar a senha no cofre por padrão, com opção Usar senha somente desta vez, e reutilizar automaticamente nos próximos logins; atalho para trocar/esquecer e retorno ao formulário quando a tentativa falha.
 - Linux: catálogo de protocolos/plugins, cadastro pelo editor nativo, login interativo opcional por nmcli --ask, importação PCF sem senhas e validação de hooks executáveis. A existência do plugin não homologa gateways.

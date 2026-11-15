@@ -136,9 +136,19 @@ pub fn save(name: &str, gateway: &str) -> Result<String, BackendError> {
     Ok(id)
 }
 
+const IGNORED: &str = "ignored";
+
+fn ignore_key(name: &str, gateway: &str) -> String {
+    format!("{name}@{gateway}")
+}
+
 pub fn remove(id: &str) -> Result<(), BackendError> {
     disconnect(id);
     let file = load();
+    // A removed profile must not come back on the next automatic import.
+    if let (Ok(name), Ok(gateway)) = (file.string(id, "name"), file.string(id, "gateway")) {
+        file.set_boolean(IGNORED, &ignore_key(&name, &gateway), true);
+    }
     file.remove_group(id)
         .map_err(|_| error(ErrorKind::NotFound, "Perfil Fortinet não encontrado."))?;
     persist(&file)
@@ -273,6 +283,31 @@ fn remember(id: &str, message: &str) {
     if let Ok(mut errors) = LAST_ERROR.get_or_init(Default::default).lock() {
         errors.insert(id.to_owned(), message.to_owned());
     }
+}
+
+/// Import new FortiClient SSO connections that were never imported or removed.
+/// Returns the names imported now.
+pub fn auto_import() -> Vec<String> {
+    let file = load();
+    let known: Vec<String> = file
+        .groups()
+        .iter()
+        .filter_map(|id| {
+            Some(ignore_key(
+                &file.string(id, "name").ok()?,
+                &file.string(id, "gateway").ok()?,
+            ))
+        })
+        .collect();
+    discover_forticlient()
+        .into_iter()
+        .filter(|item| item.sso)
+        .filter(|item| {
+            let key = ignore_key(&item.name, &item.gateway);
+            !known.contains(&key) && !file.boolean(IGNORED, &key).unwrap_or(false)
+        })
+        .filter_map(|item| save(&item.name, &item.gateway).ok().map(|_| item.name))
+        .collect()
 }
 
 pub struct Discovered {

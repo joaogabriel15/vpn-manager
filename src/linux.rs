@@ -2202,6 +2202,19 @@ fn monitor(ui: &Rc<Ui>) {
     });
     let u = Rc::downgrade(ui);
     glib::spawn_future_local(async move {
+        let imported = gio::spawn_blocking(fortinet::auto_import)
+            .await
+            .unwrap_or_default();
+        if let (Some(u), false) = (u.upgrade(), imported.is_empty()) {
+            refresh(&u);
+            u.status.set_text(&format!(
+                "Importado do FortiClient: {}.",
+                imported.join(", ")
+            ));
+        }
+    });
+    let u = Rc::downgrade(ui);
+    glib::spawn_future_local(async move {
         while rx.recv().await.is_ok() {
             let Some(u) = u.upgrade() else { break };
             refresh(&u);
