@@ -28,6 +28,15 @@ try {
     $server = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $route.ifIndex | Select-Object -First 1).IPAddress
     Write-Host "Server address: $server"
 
+    Step 'Enable client services disabled in the runner image'
+    foreach ($svc in 'RasMan', 'RasAuto', 'SstpSvc', 'VaultSvc', 'KeyIso', 'Netman') {
+        $s = Get-Service $svc -ErrorAction SilentlyContinue
+        if (-not $s) { continue }
+        if ($s.StartType -eq 'Disabled') { Set-Service $svc -StartupType Manual }
+        if ($s.Status -ne 'Running') { Start-Service $svc -ErrorAction Continue }
+        Write-Host "$svc was $($s.StartType)/$($s.Status), now $((Get-Service $svc).Status)"
+    }
+
     Step "Create $TunnelType client profile with stored credentials"
     Add-VpnConnection -Name $name -ServerAddress $server -TunnelType $TunnelType -AuthenticationMethod MSChapv2 -EncryptionLevel Required -SplitTunneling -RememberCredential -Force
     # Same call Windows makes for "remember credentials"; rasdial reuses them when no user is given.
