@@ -29,13 +29,14 @@ try {
     Write-Host "Server address: $server"
 
     Step 'Enable client services disabled in the runner image'
-    foreach ($svc in 'RasMan', 'RasAuto', 'SstpSvc', 'VaultSvc', 'KeyIso', 'Netman') {
-        $s = Get-Service $svc -ErrorAction SilentlyContinue
-        if (-not $s) { continue }
-        if ($s.StartType -eq 'Disabled') { Set-Service $svc -StartupType Manual }
-        if ($s.Status -ne 'Running') { Start-Service $svc -ErrorAction Continue }
-        Write-Host "$svc was $($s.StartType)/$($s.Status), now $((Get-Service $svc).Status)"
+    function Enable-ServiceTree($svcName) {
+        $s = Get-Service $svcName
+        foreach ($dep in $s.ServicesDependedOn) { Enable-ServiceTree $dep.Name }
+        if ($s.StartType -eq 'Disabled') { Set-Service $svcName -StartupType Manual }
+        if ((Get-Service $svcName).Status -ne 'Running') { Start-Service $svcName }
+        Write-Host "$svcName was $($s.StartType)/$($s.Status), now $((Get-Service $svcName).Status)"
     }
+    Enable-ServiceTree 'RasMan'
 
     Step "Create $TunnelType client profile with stored credentials"
     Add-VpnConnection -Name $name -ServerAddress $server -TunnelType $TunnelType -AuthenticationMethod MSChapv2 -EncryptionLevel Required -SplitTunneling -RememberCredential -Force
