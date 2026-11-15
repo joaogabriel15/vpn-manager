@@ -5,7 +5,7 @@ fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || matches!(args[0].as_str(), "--help" | "-h") {
         println!(
-            "vpn-manager-cli list\nvpn-manager-cli catalog\nvpn-manager-cli import <arquivo>\nvpn-manager-cli validate-import <arquivo>\nvpn-manager-cli export <uuid> <arquivo-novo>\nvpn-manager-cli edit <uuid>\nvpn-manager-cli create-native <wireguard|serviço-plugin>\nvpn-manager-cli connect <uuid> --ask\nvpn-manager-cli validate-profile <arquivo.toml>\nvpn-manager-cli create-profile <arquivo.toml>\nvpn-manager-cli capabilities\nvpn-manager-cli cancel <uuid>\nvpn-manager-cli connect <uuid>\nvpn-manager-cli disconnect <uuid>\nvpn-manager-cli save-reference <uuid> <arquivo.toml>\nvpn-manager-cli connect-reference <arquivo.toml>\n\nRequer NetworkManager. Login usa o agente de segredos do sistema. Referências não incluem configuração do túnel; documentos v2 podem criar OpenVPN básico sem credenciais."
+            "vpn-manager-cli list\nvpn-manager-cli catalog\nvpn-manager-cli import <arquivo>\nvpn-manager-cli validate-import <arquivo>\nvpn-manager-cli discover\nvpn-manager-cli export <uuid> <arquivo-novo>\nvpn-manager-cli edit <uuid>\nvpn-manager-cli create-native <wireguard|serviço-plugin>\nvpn-manager-cli connect <uuid> --ask\nvpn-manager-cli validate-profile <arquivo.toml>\nvpn-manager-cli create-profile <arquivo.toml>\nvpn-manager-cli capabilities\nvpn-manager-cli cancel <uuid>\nvpn-manager-cli connect <uuid>\nvpn-manager-cli disconnect <uuid>\nvpn-manager-cli save-reference <uuid> <arquivo.toml>\nvpn-manager-cli connect-reference <arquivo.toml>\n\nRequer NetworkManager. Login usa o agente de segredos do sistema. Referências não incluem configuração do túnel; documentos v2 podem criar OpenVPN básico sem credenciais."
         );
         return std::process::ExitCode::SUCCESS;
     }
@@ -78,6 +78,16 @@ async fn run(args: &[String]) -> Result<(), String> {
             if format == vpn_manager_core::import::ImportFormat::CiscoPcf {
                 println!(
                     "Senhas do arquivo Cisco PCF não foram importadas; configure-as pelo agente do sistema."
+                );
+            }
+        }
+        ["discover"] => {
+            for item in vpn_manager_networkmanager::fortinet::discover_forticlient() {
+                println!(
+                    "FortiClient\t{}\t{}\t{}",
+                    item.name.escape_default(),
+                    item.gateway,
+                    if item.sso { "sso" } else { "senha" }
                 );
             }
         }

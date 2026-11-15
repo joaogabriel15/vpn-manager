@@ -3,6 +3,7 @@ use vpn_manager_core::settings::{OpenVpnProfile, ProfileChanges, ProfileField};
 use vpn_manager_core::{ConnectionState, Profile, sort_profiles};
 pub mod desktop;
 mod events;
+pub mod fortinet;
 mod inventory;
 mod management;
 pub mod vault;
@@ -279,8 +280,12 @@ fn exit_kind(code: i32) -> ErrorKind {
     }
 }
 
+/// NetworkManager profiles plus the app's own Fortinet SSO profiles.
 pub async fn profiles() -> Result<Vec<Profile>, String> {
-    NetworkManager.profiles().await.map_err(|e| e.to_string())
+    let mut profiles = NetworkManager.profiles().await.map_err(|e| e.to_string())?;
+    profiles.extend(fortinet::profiles());
+    sort_profiles(&mut profiles);
+    Ok(profiles)
 }
 
 async fn discover_profiles() -> Result<Vec<Profile>, BackendError> {

@@ -1,6 +1,7 @@
 // Dialog widgets remain supported in GTK 4; keeping them supports GTK 4.12 desktops.
 #![allow(deprecated)]
 use vpn_manager_networkmanager as backend;
+use vpn_manager_networkmanager::fortinet;
 #[path = "icons.rs"]
 mod icons;
 use gtk::{gio, glib, prelude::*};
@@ -518,7 +519,8 @@ fn build(app: &gtk::Application) {
     let import = icon_button("Importar arquivo…", "import", "ghost");
     let create = icon_button("Criar OpenVPN…", "plus", "ghost");
     let other = icon_button("Outros protocolos…", "settings", "ghost");
-    for b in [&import, &create, &other] {
+    let forticlient = icon_button("Importar do FortiClient…", "import", "ghost");
+    for b in [&import, &forticlient, &create, &other] {
         add_menu.append(b);
         let pop = add_popover.downgrade();
         b.connect_clicked(move |_| {
@@ -680,6 +682,8 @@ fn build(app: &gtk::Application) {
     reload.connect_clicked(move |_| refresh(&u));
     let u = ui.clone();
     import.connect_clicked(move |_| import_profile(&u));
+    let u = ui.clone();
+    forticlient.connect_clicked(move |_| import_forticlient(&u));
     let u = ui.clone();
     create.connect_clicked(move |_| create_profile(&u));
     let u = ui.clone();
@@ -1305,6 +1309,11 @@ fn render(ui: &Rc<Ui>) {
             ));
         }
         let delete = icon_button("Remover perfil", "trash", "danger");
+        let external = p.kind == fortinet::KIND;
+        edit.set_visible(!external);
+        for b in [&login, &credentials, &duplicate, &export] {
+            b.set_visible(!external);
+        }
         for b in [&login, &credentials, &duplicate, &export, &delete] {
             menu.append(b);
             let pop = popover.downgrade();
@@ -1357,7 +1366,7 @@ fn render(ui: &Rc<Ui>) {
                 if !confirm(
                     &u2,
                     &format!(
-                        "Remover a VPN ‘{}’? O perfil será excluído do sistema{}.",
+                        "Remover a VPN ‘{}’? O perfil será excluído{}.",
                         p.name,
                         if p.state.is_connected() {
                             " e a conexão será encerrada"
@@ -1369,6 +1378,11 @@ fn render(ui: &Rc<Ui>) {
                 .await
                 {
                     return Ok("Remoção cancelada.".into());
+                }
+                if p.kind == fortinet::KIND {
+                    fortinet::remove(&p.uuid).map_err(|e| e.to_string())?;
+                    refresh(&u2);
+                    return Ok("Perfil removido.".into());
                 }
                 backend::NetworkManager
                     .remove(&p.uuid)
@@ -1413,6 +1427,17 @@ fn toggle(ui: &Rc<Ui>, p: Profile) {
 }
 
 fn connect_profile(ui: &Rc<Ui>, p: Profile, force_prompt: bool) {
+    if p.kind == fortinet::KIND {
+        launch(ui, async move {
+            if p.state.is_connected() || p.state.is_transitioning() {
+                fortinet::disconnect(&p.uuid);
+                return Ok("Encerrando a VPN Fortinet.".into());
+            }
+            fortinet::connect(&p.uuid).map_err(|e| e.to_string())?;
+            Ok("Autorize como administrador e conclua o login SSO no navegador.".into())
+        });
+        return;
+    }
     let u = ui.clone();
     launch(ui, async move {
         if p.state.is_transitioning() {
@@ -1781,6 +1806,42 @@ fn create_other_profile(ui: &Rc<Ui>) {
     });
 }
 
+fn import_forticlient(ui: &Rc<Ui>) {
+    let u = ui.clone();
+    launch(ui, async move {
+        let found = fortinet::discover_forticlient();
+        if found.is_empty() {
+            return Ok("Nenhuma conexão SSL-VPN do FortiClient foi encontrada. Abra o FortiClient uma vez com a conexão selecionada e tente de novo.".into());
+        }
+        let mut imported = 0;
+        for item in found {
+            if !item.sso {
+                // shortcut: password-only FortiClient profiles need the NetworkManager
+                // fortisslvpn plugin; import them there once it is supported.
+                continue;
+            }
+            if confirm(
+                &u,
+                &format!(
+                    "Importar ‘{}’ do FortiClient (gateway {}, login SSO pelo navegador)? Para conectar, o app usa o openfortivpn com autorização de administrador.",
+                    item.name, item.gateway
+                ),
+            )
+            .await
+            {
+                fortinet::save(&item.name, &item.gateway).map_err(|e| e.to_string())?;
+                imported += 1;
+            }
+        }
+        refresh(&u);
+        Ok(match imported {
+            0 => "Nenhuma conexão importada.".into(),
+            1 => "Conexão do FortiClient importada.".into(),
+            n => format!("{n} conexões do FortiClient importadas."),
+        })
+    });
+}
+
 fn import_profile(ui: &Rc<Ui>) {
     let u = ui.clone();
     launch(ui, async move {
@@ -2135,6 +2196,22 @@ fn set_autostart(enabled: bool) -> std::io::Result<()> {
     }
 }
 fn monitor(ui: &Rc<Ui>) {
+    let (tx, rx) = async_channel::unbounded::<()>();
+    fortinet::set_listener(move || {
+        let _ = tx.try_send(());
+    });
+    let u = Rc::downgrade(ui);
+    glib::spawn_future_local(async move {
+        while rx.recv().await.is_ok() {
+            let Some(u) = u.upgrade() else { break };
+            refresh(&u);
+            for p in fortinet::profiles() {
+                if let Some(message) = fortinet::last_error(&p.uuid) {
+                    u.status.set_text(&message);
+                }
+            }
+        }
+    });
     let u = Rc::downgrade(ui);
     match backend::NetworkManager.subscribe(move |event| {
         if let Some(u) = u.upgrade() {

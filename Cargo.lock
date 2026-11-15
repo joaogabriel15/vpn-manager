@@ -3342,6 +3342,7 @@ version = "0.3.0"
 dependencies = [
  "flate2",
  "gio",
+ "serde_json",
  "tar",
  "tempfile",
  "vpn-manager-core",
