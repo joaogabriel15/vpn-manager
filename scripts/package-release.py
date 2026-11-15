@@ -233,7 +233,8 @@ def msi(version, staging, archive, temp):
     subprocess.run([str(wix / "candle.exe"), "-nologo", "-arch", "x64", f"-dVersion={version.split('-')[0]}",
                     f"-dSource={staging}", f"-dLicenseSource={staging / 'licenses'}", "-out", str(objects) + os.sep,
                     str(ROOT / "packaging/windows/vpn-manager.wxs"), str(licenses)], check=True)
-    subprocess.run([str(wix / "light.exe"), "-nologo", "-spdb", "-out", str(archive),
+    # ICE57 flags the all-users Start menu shortcut of a per-machine package; CI checks it is installed.
+    subprocess.run([str(wix / "light.exe"), "-nologo", "-spdb", "-sice:ICE57", "-out", str(archive),
                     *map(str, objects.glob("*.wixobj"))], check=True)
 
 

@@ -283,7 +283,7 @@ pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
         None
     };
     let path = private_pcf.as_ref().map_or(path, |file| file.path());
-    execute(&[
+    let output = execute(&[
         "connection",
         "import",
         "type",
@@ -292,8 +292,31 @@ pub(crate) async fn import(path: &Path) -> Result<(), BackendError> {
         path.to_str().ok_or_else(|| invalid("Caminho inválido."))?,
     ])
     .await
-    .map(|_| ())
-    .map_err(|error| BackendError { kind: error.kind, message: "O plugin não conseguiu importar o arquivo. Confira o formato e as opções no editor nativo; o conteúdo da configuração foi omitido deste erro.".into() })
+    .map_err(|error| BackendError { kind: error.kind, message: "O plugin não conseguiu importar o arquivo. Confira o formato e as opções no editor nativo; o conteúdo da configuração foi omitido deste erro.".into() })?;
+    // NetworkManager imports WireGuard with autoconnect=yes and activates it at
+    // once; an imported profile must only connect when the user asks.
+    if format == vpn_manager_core::import::ImportFormat::WireGuard
+        && let Some(id) = imported_uuid(&output)
+    {
+        execute(&[
+            "connection",
+            "modify",
+            "uuid",
+            id,
+            "connection.autoconnect",
+            "no",
+        ])
+        .await?;
+        let _ = execute(&["connection", "down", "uuid", id]).await;
+    }
+    Ok(())
+}
+
+/// nmcli prints the new UUID in parentheses; the surrounding text is localized.
+fn imported_uuid(output: &str) -> Option<&str> {
+    output
+        .split(['(', ')'])
+        .find(|part| crate::desktop::validate_uuid(part).is_ok())
 }
 
 pub(crate) async fn export(id: &str, path: &Path) -> Result<(), BackendError> {
@@ -332,6 +355,21 @@ pub(crate) async fn cancel(id: &str) -> Result<(), BackendError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn imported_uuid_ignores_localized_text() {
+        let id = "0f5e7c1a-2b3d-4e5f-8a9b-0c1d2e3f4a5b";
+        assert_eq!(
+            super::imported_uuid(&format!(
+                "Conexão \"wg (lab)\" ({id}) adicionada com sucesso."
+            )),
+            Some(id)
+        );
+        assert_eq!(
+            super::imported_uuid("Connection 'x' successfully added."),
+            None
+        );
+    }
+
     use super::*;
     use std::{cell::RefCell, io::Write};
 

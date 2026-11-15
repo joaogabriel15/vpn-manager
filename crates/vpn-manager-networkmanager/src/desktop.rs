@@ -80,7 +80,7 @@ pub async fn open_editor(
     spawn(&args)
 }
 
-fn validate_uuid(id: &str) -> Result<(), BackendError> {
+pub(crate) fn validate_uuid(id: &str) -> Result<(), BackendError> {
     if id.len() == 36
         && id.bytes().enumerate().all(|(i, c)| {
             if [8, 13, 18, 23].contains(&i) {
