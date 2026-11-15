@@ -17,6 +17,13 @@ function Wait-State($expected) {
 }
 
 try {
+    Step 'Client RAS viability before RRAS'
+    Get-PnpDevice -Class Net -ErrorAction SilentlyContinue | Where-Object FriendlyName -like 'WAN Miniport*' | Format-Table -AutoSize Status, FriendlyName
+    Set-Service RasMan -StartupType Manual
+    sc.exe start RasMan | Select-String STATE
+    Start-Sleep -Seconds 5
+    sc.exe query RasMan | Select-String 'STATE|EXIT_CODE'
+
     Step 'Install RRAS'
     Install-WindowsFeature RemoteAccess, DirectAccess-VPN, Routing -IncludeManagementTools | Out-Null
     Install-RemoteAccess -VpnType Vpn -IPAddressRange '10.77.0.10', '10.77.0.50'
