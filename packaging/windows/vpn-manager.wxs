@@ -11,12 +11,20 @@
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="VPN Manager">
-          <Component Id="App" Guid="*" Win64="yes">
+          <Component Id="AppExe" Guid="*" Win64="yes">
             <File Id="AppExe" Source="$(var.Source)\vpn-manager.exe" KeyPath="yes" />
-            <File Id="CliExe" Source="$(var.Source)\vpn-manager-cli.exe" />
-            <File Id="License" Source="$(var.Source)\LICENSE" Name="LICENSE.txt" />
-            <File Id="Readme" Source="$(var.Source)\README.md" />
-            <File Id="ThirdParty" Source="$(var.Source)\THIRD-PARTY.txt" />
+          </Component>
+          <Component Id="CliExe" Guid="*" Win64="yes">
+            <File Id="CliExe" Source="$(var.Source)\vpn-manager-cli.exe" KeyPath="yes" />
+          </Component>
+          <Component Id="License" Guid="*" Win64="yes">
+            <File Id="License" Source="$(var.Source)\LICENSE" Name="LICENSE.txt" KeyPath="yes" />
+          </Component>
+          <Component Id="Readme" Guid="*" Win64="yes">
+            <File Id="Readme" Source="$(var.Source)\README.md" KeyPath="yes" />
+          </Component>
+          <Component Id="ThirdParty" Guid="*" Win64="yes">
+            <File Id="ThirdParty" Source="$(var.Source)\THIRD-PARTY.txt" KeyPath="yes" />
           </Component>
         </Directory>
       </Directory>
@@ -29,7 +37,11 @@
       </Directory>
     </Directory>
     <Feature Id="Main" Title="VPN Manager" Level="1">
-      <ComponentRef Id="App" />
+      <ComponentRef Id="AppExe" />
+      <ComponentRef Id="CliExe" />
+      <ComponentRef Id="License" />
+      <ComponentRef Id="Readme" />
+      <ComponentRef Id="ThirdParty" />
       <ComponentRef Id="StartMenu" />
       <ComponentGroupRef Id="Licenses" />
     </Feature>
