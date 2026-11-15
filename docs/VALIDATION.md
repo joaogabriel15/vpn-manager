@@ -70,9 +70,17 @@ Resultado da execução 43735767683: **passou** para OpenVPN (certificado, sem s
 - desconexão pela CLI restaura exatamente as rotas IPv4/IPv6 e o `resolv.conf` anteriores;
 - queda do servidor: OpenVPN (`ping-exit`) sai de `Conectada` e o NetworkManager restaura rotas e DNS sozinho. WireGuard não tem sinal de vida: o tráfego para, o perfil continua `Conectada` e a restauração acontece ao desconectar.
 
-Achado: o NetworkManager importa WireGuard com `autoconnect=yes`, então o perfil conecta logo após `import`. O laboratório registra e desconecta antes de medir; o app ainda não altera esse comportamento.
+Achado e correção: o NetworkManager importa WireGuard com `autoconnect=yes` e ativa o perfil logo após `import`. O app agora desliga `autoconnect` e encerra a ativação depois de importar; o laboratório exige que o perfil importado fique `Desconectada`.
 
 Limites: sem senha/MFA, cofre, agente de segredos, suspensão ou troca de rede; o laboratório não usa gateway comercial. Reproduzir localmente: `python3 tests/lab/nm_e2e.py --runtime podman --cli <vpn-manager-cli compilada para Ubuntu 24.04>`; WireGuard exige o módulo `wireguard` carregado no host.
+
+## Instaladores — 15/11/2026
+
+O workflow de releases gera `.deb`, `.rpm`, `.msi` e `.dmg` e, antes de publicar, instala e remove o `.deb` no Ubuntu 24.04 (CLI e atalho presentes, nada sobra após remover), confere as dependências do `.rpm`, instala e desinstala o `.msi` no Windows Server 2022 (CLI, atalho do menu Iniciar e remoção dos arquivos) e monta o `.dmg` no macOS (assinatura ad hoc válida, CLI executa e atalho para Aplicativos). Não houve teste em Fedora/openSUSE reais nem em Windows 10/11 desktop.
+
+## Túnel Windows na CI — tentativa de 15/11/2026
+
+Branch `windows-tunnel-lab`: o cliente nativo (RasMan) sobe no runner Windows Server 2022, mas instalar o servidor RRAS na mesma VM desativa o RasMan, que depois termina com `TDI Event Pending`. O instalador do SoftEther não é extraível sem interação. Sem um segundo host com servidor SSTP/IKEv2, o túnel nativo não é homologável nos runners gratuitos. O teste sintético de descoberta de perfis continua na CI.
 
 ## Consumo observado
 

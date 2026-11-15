@@ -44,11 +44,11 @@ Referências: CORE-01–06, AUTH-02 e OS-00 no [backlog](BACKLOG.md).
 - [x] Preservar opções independentes de IPv4 e IPv6 no editor.
 - [x] Testar túneis OpenVPN/WireGuard isolados com IPv4, IPv6, DNS e desligamento.
 - [x] Medir uma amostra de CPU e memória da GUI em repouso.
-- [ ] Testar o fluxo completo **aplicativo → NetworkManager → gateway** em laboratório.
+- [x] Testar o fluxo completo **aplicativo → NetworkManager → gateway** em laboratório (OpenVPN com certificado e WireGuard, na CI).
 - [ ] Homologar cofre real, senha, certificados e cancelamento durante autenticação.
 - [ ] Implementar agente de segredos e desafios MFA/SAML no escopo oferecido pelo backend.
 - [ ] Implementar e validar reconexão, suspensão/retomada e troca de rede.
-- [ ] Verificar restauração de DNS/rotas e tráfego IPv4/IPv6 após falhas.
+- [x] Verificar restauração de DNS/rotas e tráfego IPv4/IPv6 após desconexão e queda do servidor (laboratório na CI; WireGuard só restaura ao desconectar, por não ter sinal de vida).
 - [ ] Homologar instalação, atualização e remoção nas distribuições e ambientes declarados.
 
 Critério de conclusão: os fluxos acima passam pelo app, com versões e evidências registradas; o laboratório das engines sozinho não encerra esta etapa. Resultados atuais em [VALIDATION.md](docs/VALIDATION.md).
@@ -98,7 +98,8 @@ Cada combinação de protocolo, engine, sistema, autenticação e gateway precis
 
 - [x] Definir licença do projeto (MIT) e inventário de licenças das dependências; engines VPN não são redistribuídas.
 - [ ] Publicar matriz de suporte com limitações e testes reproduzíveis.
-- [ ] Criar pacotes desktop, assinaturas e verificação de integridade.
+- [x] Criar pacotes desktop por sistema (`.deb`, `.rpm`, `.msi`, `.dmg`) com checksums e teste de instalação/remoção na CI.
+- [ ] Assinatura de código Windows/macOS (exige certificados pagos).
 - [ ] Validar atualização, migração e desinstalação preservando os perfis do usuário.
 - [ ] Definir limites de consumo por plataforma e acompanhar regressões.
 
