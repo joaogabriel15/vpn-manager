@@ -1,7 +1,8 @@
 name: Linux NetworkManager tunnel lab
 on:
   push:
-    branches: [linux-nm-lab]
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
