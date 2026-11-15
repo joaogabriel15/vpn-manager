@@ -36,7 +36,15 @@ try {
         if ((Get-Service $svcName).Status -ne 'Running') { Start-Service $svcName }
         Write-Host "$svcName was $($s.StartType)/$($s.Status), now $((Get-Service $svcName).Status)"
     }
-    Enable-ServiceTree 'RasMan'
+    try { Enable-ServiceTree 'RasMan' } catch {
+        Write-Host '-- RasMan diagnostics'
+        sc.exe qc RasMan
+        sc.exe start RasMan
+        reg query 'HKLM\SYSTEM\CurrentControlSet\Services\RasMan' /s | Select-Object -First 40
+        Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager' } -MaxEvents 30 |
+            Where-Object { $_.Message -match 'Remote Access|RasMan|Telephony' } | Format-List TimeCreated, Id, Message
+        throw
+    }
 
     Step "Create $TunnelType client profile with stored credentials"
     Add-VpnConnection -Name $name -ServerAddress $server -TunnelType $TunnelType -AuthenticationMethod MSChapv2 -EncryptionLevel Required -SplitTunneling -RememberCredential -Force
