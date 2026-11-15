@@ -90,6 +90,7 @@ def build_archive(target, version, binaries, output, include_notices=True):
     with tempfile.TemporaryDirectory(prefix="vpn-manager-package-") as temp:
         staging = Path(temp) / name
         staging.mkdir()
+        shutil.copy2(ROOT / "LICENSE", staging / "LICENSE")
         (staging / "README.md").write_text((ROOT / "docs/DESKTOP-RELEASES.md").read_text(), encoding="utf-8")
         if include_notices:
             notices(staging)
@@ -101,7 +102,7 @@ def build_archive(target, version, binaries, output, include_notices=True):
             resources = app / "Contents/Resources"
             resources.mkdir(parents=True)
             # Move notices into the app so they remain available after installation.
-            for item in ["licenses", "THIRD-PARTY.txt"]:
+            for item in ["LICENSE", "licenses", "THIRD-PARTY.txt"]:
                 if (staging / item).exists():
                     shutil.move(staging / item, resources / item)
             iconset = Path(temp) / "VpnManager.iconset"

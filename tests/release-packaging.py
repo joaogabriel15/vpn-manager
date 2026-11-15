@@ -37,6 +37,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(file.getmember(root + '/bin/vpn-manager').mode & 0o777, 0o755)
                 self.assertEqual(file.getmember(root + '/install.sh').mode & 0o777, 0o755)
                 self.assertIn(root + '/README.md', file.getnames())
+                self.assertIn(root + '/LICENSE', file.getnames())
                 self.assertEqual(file.getmember(root + '/README.md').mode & 0o777, 0o644)
             with archive.open('rb') as file:
                 checksum = hashlib.file_digest(file, 'sha256').hexdigest()

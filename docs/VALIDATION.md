@@ -69,6 +69,6 @@ Reproduzir: `python3 tests/lab/run.py`. Requer Podman ou Docker, `/dev/net/tun` 
 - Windows/macOS: validar interface e adaptadores iniciais em máquinas nativas; implementar engines próprias, serviços/extensões, cofre, eventos, instaladores assinados e homologação de túneis.
 - Android/iOS: adiados por decisão do proprietário. Os checks anteriores são histórico técnico, não requisito ou promessa da entrega desktop.
 - Fortinet e outros fabricantes: gateway autorizado, versão, modo e autenticação definidos; testes separados para SSL-VPN, IPsec, SAML e postura de endpoint.
-- Distribuição: decisão de licença, inventário de licenças e credenciais dos canais de publicação. Nenhum pacote foi publicado nesta etapa.
+- Distribuição: credenciais e assinatura dos canais de publicação. Licença MIT definida em 15/11/2026; prereleases são publicadas pela CI a cada push na `main`.
 
 O [backlog](../BACKLOG.md) continua sendo a referência dos critérios completos de aceite.

@@ -96,7 +96,7 @@ Cada combinação de protocolo, engine, sistema, autenticação e gateway precis
 
 - [x] Automatizar pacotes Linux/Windows/macOS e checksums; pushes na main e tags publicam prereleases após a matriz completa passar (primeira publicação em 15/11/2026).
 
-- [ ] Definir licença do projeto e inventário de licenças das dependências/engines.
+- [x] Definir licença do projeto (MIT) e inventário de licenças das dependências; engines VPN não são redistribuídas.
 - [ ] Publicar matriz de suporte com limitações e testes reproduzíveis.
 - [ ] Criar pacotes desktop, assinaturas e verificação de integridade.
 - [ ] Validar atualização, migração e desinstalação preservando os perfis do usuário.

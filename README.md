@@ -136,3 +136,7 @@ Desmarque o início automático no app, saia e remova `~/.local/bin/vpn-manager`
 O laboratório de engines está em `tests/lab/run.py`; a medição de repouso está em `tests/measure-idle.py`. Veja os [resultados e limites da validação](docs/VALIDATION.md).
 
 Referências técnicas: [GTK para Rust](https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/), [ksni](https://docs.rs/ksni/latest/ksni/), [nmcli](https://networkmanager.dev/docs/api/latest/nmcli.html).
+
+## Licença
+
+[MIT](LICENSE). Dependências mantêm suas próprias licenças, listadas nos pacotes de release.

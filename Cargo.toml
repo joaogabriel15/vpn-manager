@@ -2,6 +2,7 @@
 name = "vpn-manager"
 version = "0.2.0"
 edition = "2024"
+license = "MIT"
 
 [workspace]
 members = ["crates/vpn-manager-core", "crates/vpn-manager-networkmanager", "crates/vpn-manager-native"]
