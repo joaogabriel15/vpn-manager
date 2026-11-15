@@ -2,6 +2,7 @@
 """Check archive layout, permissions, integrity and incomplete-release rejection."""
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import tarfile
 import tempfile
@@ -36,6 +37,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(file.getmember(root + '/bin/vpn-manager').mode & 0o777, 0o755)
                 self.assertEqual(file.getmember(root + '/install.sh').mode & 0o777, 0o755)
                 self.assertIn(root + '/README.md', file.getnames())
+                self.assertEqual(file.getmember(root + '/README.md').mode & 0o777, 0o644)
             with archive.open('rb') as file:
                 checksum = hashlib.file_digest(file, 'sha256').hexdigest()
             self.assertEqual(archive.with_name(archive.name + '.sha256').read_text(), f'{checksum}  {archive.name}\n')
@@ -51,6 +53,7 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 package.build_archive('x86_64-pc-windows-msvc', '0.2.0', binaries, base / 'dist', False)
             (binaries / 'vpn-manager-native-cli.exe').write_bytes(b'synthetic cli')
+            os.utime(binaries / 'vpn-manager.exe', (0, 0))  # crate files can date from 1970
             archive = package.build_archive('x86_64-pc-windows-msvc', '0.2.0', binaries, base / 'dist', False)
             with zipfile.ZipFile(archive) as file:
                 self.assertIn('vpn-manager-0.2.0-windows-x86_64/vpn-manager-cli.exe', file.namelist())

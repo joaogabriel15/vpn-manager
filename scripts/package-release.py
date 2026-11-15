@@ -64,6 +64,11 @@ def notices(destination):
     (destination / "THIRD-PARTY.txt").write_text("Dependency inventory (includes target-specific and build dependencies).\n\n" + "\n".join(entries), encoding="utf-8")
 
 
+def _mode(info, executables):
+    info.mode = 0o755 if info.isdir() or info.name in executables else 0o644
+    return info
+
+
 def build_archive(target, version, binaries, output, include_notices=True):
     if target not in TARGETS:
         raise ValueError("Unsupported release target")
@@ -128,13 +133,16 @@ def build_archive(target, version, binaries, output, include_notices=True):
             shutil.copytree(ROOT / "packaging/icons", staging / "icons")
             shutil.copy2(ROOT / "packaging/vpn-manager.svg", staging / "vpn-manager.svg")
         if extension == ".zip":
-            with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED) as file:
+            # Crate license files can carry 1970 mtimes, which ZIP cannot store.
+            with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED, strict_timestamps=False) as file:
                 for path in sorted(staging.rglob("*")):
                     if path.is_file():
                         file.write(path, path.relative_to(staging.parent))
         else:
             with tarfile.open(archive, "x:gz") as file:
-                file.add(staging, arcname=name)
+                # Set modes explicitly: archives built on Windows have no exec bit.
+                executables = {f"{name}/bin/vpn-manager", f"{name}/bin/{cli}", f"{name}/install.sh"}
+                file.add(staging, arcname=name, filter=lambda info: _mode(info, executables))
     with archive.open("rb") as file:
         digest = hashlib.file_digest(file, "sha256").hexdigest()
     archive.with_name(archive.name + ".sha256").write_text(f"{digest}  {archive.name}\n", encoding="ascii")

@@ -6,7 +6,7 @@ use vpn_manager_core::{
 };
 
 // A fixed script; profile names are never interpolated into PowerShell source.
-const INVENTORY: &str = r#"$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $p=@(Get-VpnConnection | ForEach-Object { [PSCustomObject]@{ Name=$_.Name; Id=$_.Guid.ToString(); Protocol=$_.TunnelType.ToString(); Status=$_.ConnectionStatus.ToString() } }); ConvertTo-Json -InputObject $p -Compress"#;
+const INVENTORY: &str = r#"$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $p=@(Get-VpnConnection | ForEach-Object { [PSCustomObject]@{ Name=$_.Name; Id=([guid]$_.Guid).ToString(); Protocol=$_.TunnelType.ToString(); Status=$_.ConnectionStatus.ToString() } }); ConvertTo-Json -InputObject $p -Compress"#;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]

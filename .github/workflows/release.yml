@@ -62,7 +62,8 @@ jobs:
           cargo build --release --locked --target ${{ matrix.target }} -p vpn-manager -p vpn-manager-networkmanager
       - name: Saved password GUI flow (isolated)
         if: runner.os == 'Linux'
-        run: dbus-run-session -- xvfb-run -a python3 tests/saved-login.py --binary target/${{ matrix.target }}/release/vpn-manager
+        # setup-python's interpreter has no PyGObject; the D-Bus fixtures need the system one.
+        run: PATH=/usr/bin:$PATH dbus-run-session -- xvfb-run -a python3 tests/saved-login.py --binary target/${{ matrix.target }}/release/vpn-manager
       - name: Windows and macOS checks and build
         if: runner.os != 'Linux'
         run: |
