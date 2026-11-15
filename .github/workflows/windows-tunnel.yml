@@ -1,0 +1,22 @@
+name: Windows tunnel lab
+on:
+  push:
+    branches: [windows-tunnel-lab]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rras:
+    strategy:
+      fail-fast: false
+      matrix:
+        tunnel: [Pptp, Sstp]
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build -p vpn-manager-native --locked
+      - name: App to RRAS tunnel (disposable runner)
+        shell: pwsh
+        run: ./tests/windows-tunnel.ps1 -Cli ./target/debug/vpn-manager-native-cli.exe -TunnelType ${{ matrix.tunnel }}
