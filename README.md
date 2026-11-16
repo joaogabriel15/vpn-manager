@@ -67,6 +67,14 @@ sudo zypper addrepo https://joaogabriel15.github.io/vpn-manager/vpn-manager.repo
 sudo zypper install vpn-manager
 ```
 
+**Para atualizar depois**, use o comando de sempre do seu sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo pacman -Syu` ou `sudo zypper update`. As versões novas do VPN Manager chegam junto com as do sistema.
+
+**Já instalou antes pelo `install.sh`?** Apague a cópia antiga para o sistema usar a do pacote:
+
+```sh
+rm -f ~/.local/bin/vpn-manager ~/.local/bin/vpn-manager-cli ~/.local/share/applications/br.com.pacheco.VpnManager.desktop
+```
+
 **Avisos na primeira abertura.** O app ainda não tem assinatura digital paga, então o sistema pode desconfiar dele:
 
 - **Windows:** em "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**.
