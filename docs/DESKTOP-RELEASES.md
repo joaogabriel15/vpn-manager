@@ -43,3 +43,7 @@ O workflow **Package repositories** roda depois de cada release estável (tag `v
 
 O mesmo workflow atualiza `Casks/vpn-manager.rb` em [joaogabriel15/homebrew-tap](https://github.com/joaogabriel15/homebrew-tap) a partir de `packaging/homebrew/vpn-manager.rb.in` e dos checksums dos `.dmg` da última release estável. O envio usa uma chave de deploy com escrita somente nesse repositório (secret `HOMEBREW_TAP_KEY`). Depois instala e remove o cask em macOS Apple Silicon e Intel. O Homebrew oficial exige notarização, por isso o cask fica no tap próprio.
 
+## winget
+
+Manifestos em `packaging/winget/<versão>/` (schema 1.28.0). O workflow **winget manifest check** instala o winget no Windows Server 2022, roda `winget validate`, instala em modo silencioso pelo manifesto, executa a CLI e desinstala. A 0.3.1 foi enviada em microsoft/winget-pkgs#481248. Para uma versão nova: copie a pasta, atualize versão, URL, `InstallerSha256` e o `ProductCode` (extraído do `.msi` com `msiinfo export <msi> Property`), valide pelo workflow e abra o PR "Update: joaogabriel15.VPNManager to X.Y.Z".
+

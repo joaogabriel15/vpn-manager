@@ -73,7 +73,13 @@ sudo zypper install vpn-manager
 brew install --cask joaogabriel15/tap/vpn-manager
 ```
 
-**Para atualizar depois**, use o comando de sempre do seu sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo pacman -Syu`, `sudo zypper update` ou `brew upgrade`. As versões novas do VPN Manager chegam junto com as do sistema.
+**Windows (winget):** em análise pela Microsoft ([pedido](https://github.com/microsoft/winget-pkgs/pull/481248)). Depois de aprovado:
+
+```powershell
+winget install joaogabriel15.VPNManager
+```
+
+**Para atualizar depois**, use o comando de sempre do seu sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo pacman -Syu`, `sudo zypper update`, `brew upgrade` ou `winget upgrade`. As versões novas do VPN Manager chegam junto com as do sistema.
 
 **Já instalou antes pelo `install.sh`?** Apague a cópia antiga para o sistema usar a do pacote:
 
