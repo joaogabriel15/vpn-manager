@@ -67,7 +67,13 @@ sudo zypper addrepo https://joaogabriel15.github.io/vpn-manager/vpn-manager.repo
 sudo zypper install vpn-manager
 ```
 
-**Para atualizar depois**, use o comando de sempre do seu sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo pacman -Syu` ou `sudo zypper update`. As versões novas do VPN Manager chegam junto com as do sistema.
+**Mac (Homebrew):**
+
+```sh
+brew install --cask joaogabriel15/tap/vpn-manager
+```
+
+**Para atualizar depois**, use o comando de sempre do seu sistema: `sudo apt upgrade`, `sudo dnf upgrade`, `sudo pacman -Syu`, `sudo zypper update` ou `brew upgrade`. As versões novas do VPN Manager chegam junto com as do sistema.
 
 **Já instalou antes pelo `install.sh`?** Apague a cópia antiga para o sistema usar a do pacote:
 

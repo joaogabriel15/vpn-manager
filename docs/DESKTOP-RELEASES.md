@@ -39,3 +39,7 @@ Referências de integração: [Get-VpnConnection](https://learn.microsoft.com/en
 
 O workflow **Package repositories** roda depois de cada release estável (tag `v*`) e também manualmente. Ele baixa o `.deb` e o `.rpm` da última release, confere os checksums, assina o `Release`/`InRelease` do APT, os pacotes RPM e o `repomd.xml` com a chave `D3EF 5AFE 4AFE B7F8 DAF3 D5DC C0F5 7413 B694 E98A` (secret `REPO_SIGNING_KEY`; pública em `packaging/repo/vpn-manager.asc`) e publica em https://joaogabriel15.github.io/vpn-manager/. O pacote Arch `vpn-manager-bin` é montado a partir do mesmo `.deb` com `packaging/arch/PKGBUILD` num contêiner Arch, assinado e adicionado com `repo-add`. Em seguida o workflow instala o pacote pelos comandos documentados em Ubuntu 24.04, Debian 13, Fedora 41 e Arch limpos. O mesmo `PKGBUILD` serve para publicar no AUR quando o cadastro de contas reabrir. O repositório contém só a versão estável mais recente; prereleases da `main` não entram.
 
+## Homebrew
+
+O mesmo workflow atualiza `Casks/vpn-manager.rb` em [joaogabriel15/homebrew-tap](https://github.com/joaogabriel15/homebrew-tap) a partir de `packaging/homebrew/vpn-manager.rb.in` e dos checksums dos `.dmg` da última release estável. O envio usa uma chave de deploy com escrita somente nesse repositório (secret `HOMEBREW_TAP_KEY`). Depois instala e remove o cask em macOS Apple Silicon e Intel. O Homebrew oficial exige notarização, por isso o cask fica no tap próprio.
+

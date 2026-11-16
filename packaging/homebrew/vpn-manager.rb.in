@@ -1,0 +1,22 @@
+cask "vpn-manager" do
+  arch arm: "arm64", intel: "x86_64"
+
+  version "@VERSION@"
+  sha256 arm:   "@SHA256_ARM@",
+         intel: "@SHA256_INTEL@"
+
+  url "https://github.com/joaogabriel15/vpn-manager/releases/download/v#{version}/vpn-manager-#{version}-macos-#{arch}.dmg"
+  name "VPN Manager"
+  desc "Gerenciador de VPN simples, com um clique para conectar"
+  homepage "https://github.com/joaogabriel15/vpn-manager"
+
+  depends_on macos: ">= :ventura"
+
+  app "VPN Manager.app"
+  binary "#{appdir}/VPN Manager.app/Contents/MacOS/vpn-manager-cli"
+
+  caveats <<~EOS
+    O app ainda não tem notarização da Apple. Na primeira abertura, se o macOS
+    bloquear, abra Ajustes do Sistema → Privacidade e Segurança → Abrir Mesmo Assim.
+  EOS
+end

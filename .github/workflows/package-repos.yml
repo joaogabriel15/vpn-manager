@@ -77,3 +77,47 @@ jobs:
           fi
           vpn-manager-cli --version
           test -f /usr/share/applications/br.com.pacheco.VpnManager.desktop
+  homebrew:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update the cask in joaogabriel15/homebrew-tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_KEY: ${{ secrets.HOMEBREW_TAP_KEY }}
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          version=${tag#v}
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir sums --pattern '*macos-*.dmg.sha256'
+          arm=$(cut -d' ' -f1 sums/*macos-arm64.dmg.sha256)
+          intel=$(cut -d' ' -f1 sums/*macos-x86_64.dmg.sha256)
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$TAP_KEY" > ~/.ssh/tap && chmod 600 ~/.ssh/tap
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/tap -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new'
+          git clone -q git@github.com:joaogabriel15/homebrew-tap.git tap
+          mkdir -p tap/Casks
+          sed "s/@VERSION@/$version/; s/@SHA256_ARM@/$arm/; s/@SHA256_INTEL@/$intel/" packaging/homebrew/vpn-manager.rb.in > tap/Casks/vpn-manager.rb
+          cd tap
+          git config user.name "VPN Manager releases"
+          git config user.email "41350439+joaogabriel15@users.noreply.github.com"
+          git add Casks/vpn-manager.rb
+          git diff --cached --quiet || { git commit -qm "vpn-manager $version"; git push -q; }
+  brew-install:
+    needs: homebrew
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Install from the tap, as documented
+        run: |
+          brew install --cask joaogabriel15/tap/vpn-manager
+          vpn-manager-cli --version
+          test -d "/Applications/VPN Manager.app"
+          brew uninstall --cask vpn-manager
+          test ! -e "/Applications/VPN Manager.app"
+
