@@ -15,6 +15,7 @@ optdepends=(
 )
 provides=('vpn-manager')
 conflicts=('vpn-manager')
+options=('!debug' '!strip')
 source=("vpn-manager-${pkgver}.deb::${url}/releases/download/v${pkgver}/vpn-manager-${pkgver}-linux-x86_64.deb")
 sha256sums=('SKIP')
 

@@ -61,7 +61,7 @@ docker run --rm -v "$work:/build" -v "$site/arch/x86_64:/out" archlinux:base bas
     for link in vpn-manager.db vpn-manager.files vpn-manager.db.sig vpn-manager.files.sig; do
         [ -L "$link" ] && cp --remove-destination "$(readlink -f "$link")" "$link"
     done
-    chown -R '"$(id -u):$(id -g)"' /out'
+    chown -R '"$(id -u):$(id -g)"' /out /build'
 rm -rf "$work"
 
 cp "$root/packaging/repo/vpn-manager.asc" "$site/vpn-manager.asc"
