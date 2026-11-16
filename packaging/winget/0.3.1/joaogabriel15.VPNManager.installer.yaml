@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.28.0.schema.json
 PackageIdentifier: joaogabriel15.VPNManager
 PackageVersion: 0.3.1
 Platform:
@@ -19,4 +19,4 @@ Installers:
   InstallerUrl: https://github.com/joaogabriel15/vpn-manager/releases/download/v0.3.1/vpn-manager-0.3.1-windows-x86_64.msi
   InstallerSha256: C8009E8D55C5D583D440C10E225DE132B5A18AF25C0A41962A5AD98EC6849B4D
 ManifestType: installer
-ManifestVersion: 1.9.0
+ManifestVersion: 1.28.0
