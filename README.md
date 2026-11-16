@@ -1,5 +1,7 @@
 # VPN Manager
 
+**Português** · [English](README.en.md)
+
 **Todas as suas VPNs em um só lugar, em português e com um clique para conectar.**
 
 O VPN Manager lista as VPNs do computador, importa as configurações que a sua empresa ou provedor enviou e conecta pela janela ou pelo ícone perto do relógio. Ele não envia seus dados para nenhum servidor e guarda as senhas no cofre do próprio sistema.
