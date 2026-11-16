@@ -8,7 +8,7 @@ permissions:
 jobs:
   validate:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       # Windows Server images do not ship winget.
@@ -20,7 +20,7 @@ jobs:
           winget validate --manifest $dir
           if ($LASTEXITCODE -ne 0) { throw 'winget validate failed' }
           winget settings --enable LocalManifestFiles
-          winget install --manifest $dir --accept-package-agreements --accept-source-agreements --disable-interactivity
+          winget install --manifest $dir --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
           if ($LASTEXITCODE -ne 0) { throw "winget install failed: $LASTEXITCODE" }
           & "$env:ProgramFiles\VPN Manager\vpn-manager-cli.exe" --version
-          winget uninstall --product-code '{61A9EC16-D1FC-42C0-A8C6-C5B1170E39E7}' --disable-interactivity
+          winget uninstall --product-code '{61A9EC16-D1FC-42C0-A8C6-C5B1170E39E7}' --silent --disable-interactivity
