@@ -24,7 +24,8 @@ Baixe o arquivo do seu sistema na **[página de downloads](https://github.com/jo
 | --- | --- | --- |
 | Ubuntu 24.04+, Debian 13+, Mint 22+ | `…-linux-x86_64.deb` | Dê dois cliques no arquivo e clique em **Instalar** |
 | Fedora 40+, openSUSE | `…-linux-x86_64.rpm` | Dê dois cliques no arquivo e clique em **Instalar** |
-| Arch, CachyOS, Manjaro e outras | `…-linux-x86_64.tar.gz` | Extraia, abra um terminal na pasta e rode `./install.sh` |
+| Arch, CachyOS e Manjaro | — | Use o repositório `pacman` abaixo |
+| Outras distribuições | `…-linux-x86_64.tar.gz` | Extraia, abra um terminal na pasta e rode `./install.sh` |
 | Windows 10 e 11 | `…-windows-x86_64.msi` | Dê dois cliques e siga o instalador |
 | Mac com chip Apple (M1 ou mais novo) | `…-macos-arm64.dmg` | Abra o arquivo e arraste **VPN Manager** para **Aplicativos** |
 | Mac com processador Intel | `…-macos-x86_64.dmg` | Igual ao anterior |
@@ -48,6 +49,15 @@ sudo apt update && sudo apt install vpn-manager
 ```sh
 sudo curl -fsSL -o /etc/yum.repos.d/vpn-manager.repo https://joaogabriel15.github.io/vpn-manager/vpn-manager.repo
 sudo dnf install vpn-manager
+```
+
+**Arch, CachyOS e Manjaro:**
+
+```sh
+curl -fsSL https://joaogabriel15.github.io/vpn-manager/vpn-manager.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key D3EF5AFE4AFEB7F8DAF3D5DCC0F57413B694E98A
+printf '\n[vpn-manager]\nServer = https://joaogabriel15.github.io/vpn-manager/arch/$arch\n' | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy vpn-manager-bin
 ```
 
 **openSUSE:**
@@ -130,7 +140,8 @@ O app não tem servidor próprio e não envia nada para fora. As senhas ficam no
 
 - **Ubuntu/Debian:** `sudo apt remove vpn-manager`, ou pela loja de aplicativos.
 - **Fedora:** `sudo dnf remove vpn-manager`.
-- **Arch e outras (instalado pelo `install.sh`):** apague `~/.local/bin/vpn-manager` e `~/.local/bin/vpn-manager-cli` e o atalho `br.com.pacheco.VpnManager.desktop` em `~/.local/share/applications`.
+- **Arch/CachyOS:** `sudo pacman -R vpn-manager-bin`.
+- **Outras (instalado pelo `install.sh`):** apague `~/.local/bin/vpn-manager` e `~/.local/bin/vpn-manager-cli` e o atalho `br.com.pacheco.VpnManager.desktop` em `~/.local/share/applications`.
 - **Windows:** **Configurações → Aplicativos → VPN Manager → Desinstalar**.
 - **Mac:** arraste **VPN Manager** de **Aplicativos** para o Lixo.
 

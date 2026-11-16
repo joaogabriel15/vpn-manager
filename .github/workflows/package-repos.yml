@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ['ubuntu:24.04', 'debian:trixie', 'fedora:41']
+        image: ['ubuntu:24.04', 'debian:trixie', 'fedora:41', 'archlinux:latest']
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     container: ${{ matrix.image }}
@@ -65,9 +65,15 @@ jobs:
             curl -fsSL $base/vpn-manager.asc | gpg --dearmor -o /usr/share/keyrings/vpn-manager.gpg
             echo "deb [signed-by=/usr/share/keyrings/vpn-manager.gpg] $base/apt stable main" > /etc/apt/sources.list.d/vpn-manager.list
             apt-get update && apt-get install -y vpn-manager
-          else
+          elif command -v dnf >/dev/null; then
             curl -fsSL -o /etc/yum.repos.d/vpn-manager.repo $base/vpn-manager.repo
             dnf install -y vpn-manager
+          else
+            pacman-key --init
+            curl -fsSL $base/vpn-manager.asc | pacman-key --add -
+            pacman-key --lsign-key D3EF5AFE4AFEB7F8DAF3D5DCC0F57413B694E98A
+            printf '\n[vpn-manager]\nServer = %s/arch/$arch\n' "$base" >> /etc/pacman.conf
+            pacman -Sy --noconfirm vpn-manager-bin
           fi
           vpn-manager-cli --version
           test -f /usr/share/applications/br.com.pacheco.VpnManager.desktop

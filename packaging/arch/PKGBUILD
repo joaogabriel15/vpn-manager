@@ -1,0 +1,25 @@
+# Binary package built from the release .deb; also usable on the AUR as-is.
+pkgname=vpn-manager-bin
+pkgver=0.3.1
+pkgrel=1
+pkgdesc='Gerenciador de VPN simples para NetworkManager, com bandeja e CLI'
+arch=('x86_64')
+url='https://github.com/joaogabriel15/vpn-manager'
+license=('MIT')
+depends=('gtk4' 'networkmanager' 'glibc' 'gcc-libs')
+optdepends=(
+    'networkmanager-openvpn: VPNs OpenVPN'
+    'openfortivpn: Fortinet SSL-VPN com SSO/SAML'
+    'libsecret: lembrar senhas no cofre do sistema'
+    'nm-connection-editor: editor de outros protocolos fora do KDE'
+)
+provides=('vpn-manager')
+conflicts=('vpn-manager')
+source=("vpn-manager-${pkgver}.deb::${url}/releases/download/v${pkgver}/vpn-manager-${pkgver}-linux-x86_64.deb")
+sha256sums=('SKIP')
+
+package() {
+    bsdtar -xf data.tar.* -C "$pkgdir"
+    # Debian's doc/copyright layout is not used on Arch; the license lives in usr/share/licenses.
+    rm -f "$pkgdir/usr/share/doc/vpn-manager/copyright"
+}

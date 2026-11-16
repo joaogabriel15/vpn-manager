@@ -39,6 +39,31 @@ rpmsign --macros="/usr/lib/rpm/macros:$GNUPGHOME/rpmmacros" --addsign "$site"/rp
 createrepo_c --quiet "$site/rpm"
 sign --armor --detach-sign -o "$site/rpm/repodata/repomd.xml.asc" "$site/rpm/repodata/repomd.xml"
 
+# Arch: build vpn-manager-bin from the same .deb inside an Arch container.
+deb=$(ls "$incoming"/*.deb | head -1)
+version=$(basename "$deb" | sed -E 's/^vpn-manager-(.*)-linux-x86_64\.deb$/\1/; s/-/_/g')
+work=$(mktemp -d)
+cp "$root/packaging/arch/PKGBUILD" "$work/"
+cp "$deb" "$work/vpn-manager-$version.deb"
+sed -i "s/^pkgver=.*/pkgver=$version/; s/^sha256sums=.*/sha256sums=('$(sha256sum "$deb" | cut -d' ' -f1)')/" "$work/PKGBUILD"
+gpg --batch --armor --export-secret-keys "$key" > "$work/key.asc"
+mkdir -p "$site/arch/x86_64"
+docker run --rm -v "$work:/build" -v "$site/arch/x86_64:/out" archlinux:base bash -euc '
+    pacman -Sy --noconfirm --needed base-devel >/dev/null
+    useradd -m builder && chown -R builder /build
+    su builder -c "cd /build && makepkg --nodeps --noconfirm" >/dev/null
+    export GNUPGHOME=$(mktemp -d)
+    gpg --batch --quiet --import /build/key.asc
+    cd /out && cp /build/*.pkg.tar.zst .
+    for pkg in *.pkg.tar.zst; do gpg --batch --yes --detach-sign "$pkg"; done
+    repo-add --quiet --sign vpn-manager.db.tar.gz ./*.pkg.tar.zst
+    # GitHub Pages does not serve symlinks.
+    for link in vpn-manager.db vpn-manager.files vpn-manager.db.sig vpn-manager.files.sig; do
+        [ -L "$link" ] && cp --remove-destination "$(readlink -f "$link")" "$link"
+    done
+    chown -R '"$(id -u):$(id -g)"' /out'
+rm -rf "$work"
+
 cp "$root/packaging/repo/vpn-manager.asc" "$site/vpn-manager.asc"
 cat > "$site/vpn-manager.repo" <<EOF
 [vpn-manager]
@@ -63,6 +88,11 @@ sudo apt update &amp;&amp; sudo apt install vpn-manager</pre>
 <h2>Fedora</h2>
 <pre>sudo curl -fsSL -o /etc/yum.repos.d/vpn-manager.repo $base_url/vpn-manager.repo
 sudo dnf install vpn-manager</pre>
+<h2>Arch, CachyOS e Manjaro</h2>
+<pre>curl -fsSL $base_url/vpn-manager.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key D3EF5AFE4AFEB7F8DAF3D5DCC0F57413B694E98A
+printf '\n[vpn-manager]\nServer = $base_url/arch/\$arch\n' | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy vpn-manager-bin</pre>
 <h2>openSUSE</h2>
 <pre>sudo zypper addrepo $base_url/vpn-manager.repo
 sudo zypper install vpn-manager</pre>
